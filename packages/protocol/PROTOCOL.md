@@ -192,7 +192,7 @@ and tells the user that the app or firmware needs an update.
 
 | Id | Name        | App game id         | Rules (firmware `basic_modes.cpp` is the authority) |
 | -: | ----------- | ------------------- | ---------------------------------------------------- |
-|  1 | `freePlay`  | `fidget-free-play`  | +1 per action: any switch closing, each 1/8 spinner turn, each screw detent, each squeeze. Ends after 20 s idle or 3 min. |
+|  1 | `freePlay`  | `fidget-free-play`  | +10 per action: any switch closing, each 1/8 spinner turn, each screw detent, each squeeze. Ends after 20 s with no action, or 3 min. The toy shows a celebration every 100 points. |
 |  2 | `spinCount` | `fidget-spin-count` | 30 s. +10 per full spinner turn, either direction.   |
 
 Ids 1-63 are reserved for firmware basic modes.

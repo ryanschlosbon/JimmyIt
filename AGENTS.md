@@ -243,8 +243,10 @@ These exist because the players are children with motor differences.
 - App stack: React Native (TypeScript) for the shared packages; the app shell
   in `apps/mobile/` has not been created. When it is, add `"apps/*"` to the
   root `workspaces` and give `apps/mobile` an owner in CODEOWNERS.
-- Firmware: the portable modules and their tests exist. The Arduino sketch
-  (Bluefruit GATT, sensors, OLED menu, flash storage) has not been written.
+- Firmware: the sketch runs the breadboard (one button on D0 plus the OLED)
+  with Bluetooth, the Free Play game and flash storage. Code for the full toy
+  sits behind flags in `board_config.h`; it compiles but hasn't run on
+  hardware. Battery reading and a toy-side mode menu are not written yet.
 - Squeeze calibration values are placeholders until the FSR is measured in
   the built toy.
 - `ble-react-native` has not yet been run on a phone against real firmware.

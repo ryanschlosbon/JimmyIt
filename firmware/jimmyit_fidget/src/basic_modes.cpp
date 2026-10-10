@@ -58,7 +58,7 @@ void BasicGame::update(const InputPacket& input, uint32_t nowMs) {
     score_ += turns * kSpinCountPointsPerTurn;
     addAction(turns, nowMs);
     if (nowMs - startMs_ >= kSpinCountDurationMs) finish(startMs_ + kSpinCountDurationMs, true);
-  } else {  // kFreePlay: +1 per action of any kind
+  } else {  // kFreePlay: +10 per action of any kind (the original breadboard game's rule)
     uint32_t count = popcount16(input.pressed);
     count += static_cast<uint32_t>(spinAccumulator_ / kFreePlaySpinCountsPerAction);
     spinAccumulator_ %= kFreePlaySpinCountsPerAction;
@@ -69,7 +69,7 @@ void BasicGame::update(const InputPacket& input, uint32_t nowMs) {
     } else if (squeezing_ && input.squeezeRaw <= kSqueezeRawOff) {
       squeezing_ = false;
     }
-    score_ += count;
+    score_ += count * kFreePlayPointsPerAction;
     addAction(count, nowMs);
     if (nowMs - lastActionMs_ >= kFreePlayIdleEndMs || nowMs - startMs_ >= kFreePlayMaxMs) finish(nowMs, true);
   }

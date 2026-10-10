@@ -14,6 +14,7 @@ class BasicGame {
  public:
   static constexpr uint32_t kSpinCountDurationMs = 30000;
   static constexpr uint32_t kSpinCountPointsPerTurn = 10;
+  static constexpr uint32_t kFreePlayPointsPerAction = 10;
   static constexpr uint32_t kFreePlayIdleEndMs = 20000;
   static constexpr uint32_t kFreePlayMaxMs = 180000;
   static constexpr int32_t kFreePlaySpinCountsPerAction = kSpinnerCountsPerTurn / 8;
