@@ -1,4 +1,5 @@
 import type { ImageSourcePropType } from 'react-native';
+import type { ShelfGameId } from './games';
 
 /** Replace files in assets/ or set one of these slots to require('../assets/your-image.png'). */
 export const APP_ARTWORK: Readonly<{
@@ -6,21 +7,14 @@ export const APP_ARTWORK: Readonly<{
   introEnd: ImageSourcePropType;
   jimmyFace: ImageSourcePropType | null;
   jimmyHero: ImageSourcePropType | null;
-  drawingCard: ImageSourcePropType | null;
-  shapesCard: ImageSourcePropType | null;
-  timedCard: ImageSourcePropType | null;
-  tapQuestCard: ImageSourcePropType | null;
-  rewardsCard: ImageSourcePropType | null;
+  /** Pictures for the play-screen banners; null uses the built-in drawing (components/GameArt.tsx). */
+  bannerArt: Readonly<Record<ShelfGameId, ImageSourcePropType | null>>;
 }> = {
   introStart: require('../assets/intro-start.png'),
   introEnd: require('../assets/intro-end.png'),
   jimmyFace: null,
   jimmyHero: null,
-  drawingCard: null,
-  shapesCard: null,
-  timedCard: null,
-  tapQuestCard: null,
-  rewardsCard: null,
+  bannerArt: { timed: null, tapQuest: null, drawing: null, shapes: null },
 };
 
 // Match the backgrounds in the supplied compositions so portrait screens have no letterbox edges.

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2/700Bold';
+import { Baloo2_800ExtraBold } from '@expo-google-fonts/baloo-2/800ExtraBold';
+import { Poppins_500Medium } from '@expo-google-fonts/poppins/500Medium';
 import { Poppins_400Regular } from '@expo-google-fonts/poppins/400Regular';
 import { Poppins_600SemiBold } from '@expo-google-fonts/poppins/600SemiBold';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,10 +17,11 @@ import type { SaveStatus } from '@jimmyit/game-sdk';
 import { defaultAccessibilityPreferences } from '@jimmyit/ai';
 import { getTheme } from './theme';
 import { useJimmy } from './use-jimmy';
-import { DRAWING_GAMES, tapQuestGame, timedPracticeGame, type Activity } from './games';
+import { DRAWING_GAMES, PLAY_SHELF, TIMED_PRACTICE_SECONDS, tapQuestGame, timedPracticeGame, type Activity,
+  type ShelfGameId } from './games';
 import { createToySetup, loadDevToyPanel } from './toy-connector';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
-import { HomeScreen } from './screens/HomeScreen';
+import { PlayScreen } from './screens/PlayScreen';
 import { DrawingScreen } from './screens/DrawingScreen';
 import { RewardsScreen } from './screens/RewardsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -26,13 +29,17 @@ import { IntroScreen } from './screens/IntroScreen';
 import { TimedScreen, type VirtualToy } from './screens/TimedScreen';
 import { TapQuestScreen } from './screens/TapQuestScreen';
 import { Body, Button, Eyebrow, Heading } from './components/Controls';
-import { Icon, type IconName } from './components/Icon';
+import { Icon } from './components/Icon';
+import { AppHeader, type HeaderTab } from './components/AppHeader';
+import { Bubbles } from './components/Bubbles';
+import type { BannerStat } from './components/GameBanner';
+import { FONTS, RADIUS } from './design/tokens';
 import { Jimmy } from './components/Jimmy';
 import { setupWebAccessibility } from './web-accessibility';
 
 type Screen = 'home' | 'draw' | 'rewards' | 'settings' | 'timed' | 'tapQuest';
 const NO_STROKES: readonly Stroke[] = [];
-/** Game screens reached from Home; the Home tab stays highlighted on them. */
+/** Game screens reached from the play shelf; the Play tab stays highlighted on them. */
 const isActivity = (screen: Screen) => screen === 'timed' || screen === 'tapQuest';
 const DRAWING_TICK_MS = 1000; // drawing has no clock to update; tick slowly
 
@@ -69,9 +76,9 @@ export function App() {
 
 function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const state = useJimmy();
-  const theme = getTheme(state.dark);
-  const [fontsLoaded, fontError] = useFonts({ Baloo: Baloo2_700Bold, Poppins: Poppins_400Regular,
-    PoppinsBold: Poppins_600SemiBold });
+  const theme = getTheme(state.dark, state.colorStyle);
+  const [fontsLoaded, fontError] = useFonts({ [FONTS.display]: Baloo2_700Bold, [FONTS.displayHeavy]: Baloo2_800ExtraBold,
+    [FONTS.body]: Poppins_400Regular, [FONTS.bodyMedium]: Poppins_500Medium, [FONTS.bodyBold]: Poppins_600SemiBold });
   const [screen, setScreen] = useState<Screen>('home');
   const screenRef = useRef<Screen>('home');
   const [introDone, setIntroDone] = useState(false);
@@ -93,6 +100,16 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const compact = width < 680;
   useEffect(() => setupWebAccessibility(state.dark), [state.dark]);
 
+  // The play shelf: which banner is showing, and the option chosen on each banner.
+  const [shelfIndex, setShelfIndex] = useState(0);
+  const [choices, setChoices] = useState<Partial<Record<ShelfGameId, string>>>({
+    timed: String((TIMED_PRACTICE_SECONDS[0] ?? 30) * 1000), tapQuest: 'precision',
+  });
+  const [tapQuestAutoStart, setTapQuestAutoStart] = useState(false);
+  const timedMs = Number(choices.timed ?? 30_000);
+  const tapQuestMode = (choices.tapQuest ?? 'precision') as TapQuestMode;
+  const choose = (game: ShelfGameId, value: string) => setChoices(current => ({ ...current, [game]: value }));
+
   const drawingSaveFailed = () => state.setError('Your drawing is still here. We couldn’t save your points yet — please try All done again.');
   useRunOutcome(timed, record => { setRewardFrom('timed'); setRewardNewBest(record.newBest); setReward(record.score); },
     () => state.setError('Your little moves are still here. Please use Retry saving to save your points.'));
@@ -109,6 +126,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   }, drawingSaveFailed);
 
   const navigate = (next: Screen) => {
+    if (next !== 'tapQuest') setTapQuestAutoStart(false);
     screenRef.current = next;
     setScreen(next);
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -165,6 +183,24 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     }
   };
 
+  const stats = useMemo(() => Object.fromEntries(PLAY_SHELF.map(game => {
+    const row = state.scoreboard.rows.find(item => item.gameId === game.scoreGameId(choices[game.id] ?? null));
+    return [game.id, game.stat === 'count' ? { label: 'Drawings', value: String(row?.sessions ?? 0) }
+      : { label: 'High Score', value: String(row?.bestScore ?? 0) }];
+  })) as Record<ShelfGameId, BannerStat>, [state.scoreboard, choices]);
+
+  const play = (game: ShelfGameId) => {
+    if (game === 'drawing' || game === 'shapes') { start(game); return; }
+    if (game === 'timed') {
+      navigate('timed');
+      const busy = timed.status === 'running' || timed.status === 'paused';
+      if (!busy && state.connection === 'connected') startTimed(timedMs);
+      return;
+    }
+    navigate('tapQuest');
+    if (tapQuest.status !== 'running' && tapQuest.status !== 'paused') setTapQuestAutoStart(true);
+  };
+
   if (!introDone) return <IntroScreen ready={(fontsLoaded || Boolean(fontError)) && state.ready} onDone={finishIntro} />;
 
   if ((!fontsLoaded && !fontError) || !state.ready) return <SafeAreaView style={{ flex: 1,
@@ -172,69 +208,47 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     <Jimmy face size={80} color={theme.mint} /><Text style={{ fontSize: 24, color: theme.text }}>Getting ready to play…</Text>
   </SafeAreaView>;
 
-  const nav: readonly { screen: Screen; label: string; icon: IconName }[] = [
-    { screen: 'home', label: 'Home', icon: 'home' }, { screen: 'draw', label: 'Draw', icon: 'pencil' },
-    { screen: 'rewards', label: 'Rewards', icon: 'star' },
-  ];
-  return <SafeAreaView style={{ flex: 1, backgroundColor: theme.page }}>
+  const tab: HeaderTab = screen === 'rewards' ? 'rewards' : screen === 'settings' ? 'settings' : 'play';
+  const onTab = (next: HeaderTab) => navigate(next === 'play' ? 'home' : next);
+  const errorBanner = state.error && <View accessibilityRole="alert" style={{ backgroundColor: theme.softCoral,
+    borderRadius: 16, padding: 18, marginBottom: 20, flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+    <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>{state.error}</Body></View>
+    <Button theme={theme} icon="close" accessibilityLabel="Dismiss message" onPress={() => state.setError(null)} compact />
+  </View>;
+  return <View style={{ flex: 1, backgroundColor: theme.page }}>
+    <Bubbles theme={theme} animated={state.bubbles} />
+    <SafeAreaView style={{ flex: 1 }}>
     <StatusBar barStyle={state.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.page} />
-    <View role="banner" style={{ borderBottomWidth: 1, borderColor: theme.border, backgroundColor: theme.page }}>
-      <View style={{ width: '100%', maxWidth: 1240, alignSelf: 'center', flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'space-between', paddingHorizontal: compact ? 20 : 38, paddingVertical: 18 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Jimmy home" onPress={() => navigate('home')}
-          style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', gap: 10, alignItems: 'center', opacity: pressed ? .7 : 1 }]}>
-          <Jimmy face size={42} color={theme.mint} />
-          <Text style={{ fontFamily: 'Baloo', fontSize: 32, letterSpacing: .5, color: theme.text }}>JIMMY</Text>
-        </Pressable>
-        <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-          {!compact && <Pressable accessibilityRole="button" accessibilityLabel={`Jimmy ${state.connection}. Open settings`}
-            onPress={() => navigate('settings')} style={{ flexDirection: 'row', gap: 8, alignItems: 'center',
-              backgroundColor: theme.softMint, paddingVertical: 13, paddingHorizontal: 17, borderRadius: 14, minHeight: 56 }}>
-            <Icon name="bluetooth" color={theme.dark ? theme.mint : '#087C71'} size={18} />
-            <Body theme={theme} small>{state.connection === 'connected' ? 'Jimmy connected' : state.connection === 'searching'
-              ? 'Finding Jimmy…' : state.connection === 'confirming' ? 'Say yes on Jimmy ▶' : 'Find your Jimmy'}</Body>
-          </Pressable>}
-          <Button theme={theme} icon="settings" color={theme.yellow} accessibilityLabel="Open settings"
-            onPress={() => navigate('settings')} selected={screen === 'settings'} compact />
-        </View>
-      </View>
-    </View>
-    <ScrollView ref={scroll} role="main" keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ flexGrow: 1, paddingHorizontal: compact ? 18 : 38, paddingTop: compact ? 24 : 34,
-        paddingBottom: 40 }}>
-      <View style={{ width: '100%', maxWidth: 1164, alignSelf: 'center' }}>
-        {state.error && <View accessibilityRole="alert" style={{ backgroundColor: theme.softCoral, borderRadius: 16,
-          padding: 18, marginBottom: 20, flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-          <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>{state.error}</Body></View>
-          <Button theme={theme} icon="close" accessibilityLabel="Dismiss message" onPress={() => state.setError(null)} compact />
-        </View>}
-        {screen === 'home' && <HomeScreen theme={theme} start={start} rewards={() => navigate('rewards')}
-          timed={() => navigate('timed')} tapQuest={() => navigate('tapQuest')} />}
+    <AppHeader theme={theme} compact={compact} active={tab} connection={state.connection} onTab={onTab} />
+    {screen === 'home' ? <View role="main" style={{ flex: 1, paddingHorizontal: compact ? 0 : 8 }}>
+      {errorBanner && <View style={{ paddingHorizontal: 18, paddingTop: 16, width: '100%', maxWidth: 1164,
+        alignSelf: 'center' }}>{errorBanner}</View>}
+      <PlayScreen theme={theme} games={PLAY_SHELF} stats={stats} choices={choices} onChoose={choose} onPlay={play}
+        index={shelfIndex} onIndex={setShelfIndex} toyConnected={state.connection === 'connected'} />
+    </View> : <ScrollView ref={scroll} role="main" keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ flexGrow: 1, paddingHorizontal: compact ? 10 : 30, paddingTop: compact ? 12 : 22,
+        paddingBottom: 30 }}>
+      <View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', backgroundColor: theme.sheet,
+        borderRadius: RADIUS.xl, padding: compact ? 14 : 30 }}>
+        {errorBanner}
+        {(isActivity(screen) || screen === 'draw') && <Button theme={theme} label="All games" icon="chevronLeft" compact
+          onPress={() => navigate('home')} style={{ alignSelf: 'flex-start', marginBottom: 18 }} />}
         {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
           dispatch={dispatch} finish={finish} saving={drawingRuns[activity].saveStatus === 'saving'} />}
         {screen === 'rewards' && <RewardsScreen theme={theme} progress={state.progress} />}
         {screen === 'settings' && <SettingsScreen theme={theme} state={state}
           replayIntro={() => { navigate('home'); setIntroDone(false); }} />}
-        {screen === 'tapQuest' && <TapQuestScreen theme={theme} run={tapQuest} onStart={startTapQuest} toy={state.toy} />}
+        {screen === 'tapQuest' && <TapQuestScreen theme={theme} run={tapQuest} onStart={startTapQuest} toy={state.toy}
+          mode={tapQuestMode} onMode={mode => choose('tapQuest', mode)} autoStart={tapQuestAutoStart}
+          onAutoStarted={() => setTapQuestAutoStart(false)} />}
         {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
+          durationS={timedMs / 1000} onDuration={seconds => choose('timed', String(seconds * 1000))}
           connected={state.connection === 'connected'} searching={state.connection === 'searching'}
           onConnect={state.connect} virtualToy={virtualToy} />}
       </View>
-    </ScrollView>
-    <View role="navigation" accessibilityLabel="Main navigation" style={{ backgroundColor: theme.page,
-      paddingTop: 10, paddingBottom: 16, paddingHorizontal: 16, alignItems: 'center', borderTopWidth: 1,
-      borderColor: theme.border }}>
-      <View style={{ flexDirection: 'row', gap: 8, borderWidth: 1.5, borderColor: theme.border,
-        padding: 7, borderRadius: 23, backgroundColor: theme.surface, width: compact ? '100%' : 440 }}>
-        {nav.map(item => <Button key={item.screen} theme={theme} label={item.label} icon={item.icon}
-          compact vertical={compact} selected={screen === item.screen || (isActivity(screen) && item.screen === 'home')}
-          onPress={() => navigate(item.screen)}
-          color={screen === item.screen || (isActivity(screen) && item.screen === 'home') ? theme.mint : undefined}
-          style={{ flex: 1, paddingHorizontal: compact ? 8 : 14 }} />)}
-      </View>
-    </View>
+    </ScrollView>}
     <Modal visible={reward !== null} transparent animationType="none" onRequestClose={() => setReward(null)}>
-      <View style={{ flex: 1, backgroundColor: '#0F1D33BB', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <View style={{ flex: 1, backgroundColor: theme.scrim, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
         <View accessibilityViewIsModal role="dialog" aria-label="Activity complete" style={{ width: '100%', maxWidth: 480,
           backgroundColor: theme.surface, borderRadius: 32, padding: 32, alignItems: 'center', gap: 20 }}>
           <Jimmy face size={100} color={theme.mint} />
@@ -243,17 +257,20 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
           <Body theme={theme}>{rewardFrom === 'timed' ? 'So many wonderful little moves.'
             : rewardFrom === 'tapQuest' ? 'Such careful, steady taps.' : 'What a wonderful little try.'}</Body>
           <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            <Icon name="star" color={theme.dark ? theme.yellow : '#8A6500'} size={34} />
+            <Icon name="star" color={theme.gold} size={34} />
             <Heading theme={theme} size={36}>+{reward ?? 0} points</Heading>
           </View>
-          <Button theme={theme} label="See my rewards" icon="star" color={theme.yellow}
+          <Button theme={theme} label={rewardFrom === 'draw' ? 'Keep creating' : 'Play again'}
+            icon={rewardFrom === 'timed' ? 'timer' : rewardFrom === 'tapQuest' ? 'sparkle' : 'pencil'} color={theme.yellow}
+            onPress={() => { setReward(null); navigate(rewardFrom === 'draw' ? 'draw' : rewardFrom); }} style={{ width: '100%' }} />
+          <Button theme={theme} label="All games" icon="play"
+            onPress={() => { setReward(null); navigate('home'); }} style={{ width: '100%' }} />
+          <Button theme={theme} label="See my rewards" icon="trophy"
             onPress={() => { setReward(null); navigate('rewards'); }} style={{ width: '100%' }} />
-          <Button theme={theme} label={rewardFrom === 'draw' ? 'Keep creating' : 'Keep playing'}
-            icon={rewardFrom === 'timed' ? 'timer' : rewardFrom === 'tapQuest' ? 'sparkle' : 'pencil'} onPress={() => { setReward(null);
-              navigate(rewardFrom === 'draw' ? 'draw' : rewardFrom); }} style={{ width: '100%' }} />
         </View>
       </View>
     </Modal>
     <CelebrationOverlay theme={theme} />
-  </SafeAreaView>;
+    </SafeAreaView>
+  </View>;
 }

@@ -124,7 +124,9 @@ Also enforced:
 | Add a minigame                                 | `games/<game-id>/`. Follow `games/AGENTS.md`.                           |
 | Use a new toy input or output                  | `PROTOCOL.md` first, then firmware + codec + vectors, then `core`       |
 | Add a scoring helper more than one game needs  | `packages/core/src/scoring/`, re-exported from `game-sdk/src/index.ts`  |
-| Add a screen or UI component                   | `apps/mobile/`, using `@jimmyit/app-kit` hooks for all state            |
+| Add a screen or UI component                   | `apps/mobile/`, using `@jimmyit/app-kit` hooks for all state; follow `apps/mobile/DESIGN.md` |
+| Change colors, add a color style or animation  | `apps/mobile/src/design/` (rules in `apps/mobile/DESIGN.md`)            |
+| Put a game on the play screen                  | `PLAY_SHELF` in `apps/mobile/src/games.ts` + its art in `components/GameArt.tsx` |
 | Add app logic with no UI (rewards, stats, connection behavior) | `packages/app-kit/`, never inside a screen               |
 | Add a control to the virtual toy               | `packages/fake-fidget` (behavior) + `packages/dev-toy` (panel)          |
 | Change what a saved score contains             | `core/src/scoring/types.ts` + bump `SCORE_SCHEMA_VERSION` with a migration |

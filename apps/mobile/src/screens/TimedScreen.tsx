@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { AppState, Text, View, useWindowDimensions } from 'react-native';
 import type { GameRunControls } from '@jimmyit/app-kit';
 import type { TimedPracticeState } from '@jimmyit/game-timed-practice';
@@ -16,12 +16,14 @@ export interface VirtualToy {
 
 type DemoMove = 'press' | 'spin' | 'screw';
 
-export function TimedScreen({ theme, timed, onStart, connected, searching, onConnect, virtualToy }: {
+export function TimedScreen({ theme, timed, onStart, durationS, onDuration, connected, searching, onConnect, virtualToy }: {
   readonly theme: Theme; readonly timed: GameRunControls<TimedPracticeState, never>;
-  readonly onStart: (durationMs: number) => void; readonly connected: boolean; readonly searching: boolean;
+  readonly onStart: (durationMs: number) => void;
+  /** Chosen on the play screen's banner, and changeable here. */
+  readonly durationS: number; readonly onDuration: (seconds: number) => void;
+  readonly connected: boolean; readonly searching: boolean;
   readonly onConnect: () => void; readonly virtualToy: VirtualToy | null;
 }) {
-  const [durationS, setDurationS] = useState(TIMED_PRACTICE_SECONDS[0] ?? 30);
   const { width } = useWindowDimensions();
   const compact = width < 680;
   const { status, saveStatus, pause } = timed;
@@ -46,11 +48,11 @@ export function TimedScreen({ theme, timed, onStart, connected, searching, onCon
   ];
   return <View style={{ gap: 26 }}>
     <View style={{ gap: 8 }}><Eyebrow theme={theme}>Move & discover</Eyebrow>
-      <Heading theme={theme} level={1} size={compact ? 36 : 44}>Timed toy practice</Heading>
+      <Heading theme={theme} level={1} size={compact ? 36 : 44}>Timed Run</Heading>
       <Body theme={theme}>Go at your own pace. Every move counts.</Body>
     </View>
     <View style={{ backgroundColor: theme.softMint, borderRadius: 18, padding: 20, flexDirection: 'row', gap: 12 }}>
-      <Icon name="bluetooth" color={theme.dark ? theme.mint : '#087C71'} />
+      <Icon name="bluetooth" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {virtualToy ? 'Virtual toy · The buttons below press the simulated Jimmy. Open “Toy” for every control.'
           : 'Press, spin, twist, slide — every move on Jimmy counts.'}
@@ -61,7 +63,7 @@ export function TimedScreen({ theme, timed, onStart, connected, searching, onCon
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
         {TIMED_PRACTICE_SECONDS.map(seconds => <Button key={seconds} theme={theme} label={`${seconds} sec`} compact
           selected={durationS === seconds} color={durationS === seconds ? theme.mint : undefined}
-          disabled={active || saving} onPress={() => setDurationS(seconds)} />)}
+          disabled={active || saving} onPress={() => onDuration(seconds)} />)}
       </View>
       <Text accessibilityLabel={`${Math.ceil(remainingMs / 1000)} seconds remaining`}
         style={{ fontFamily: 'Baloo', fontSize: compact ? 76 : 96, lineHeight: compact ? 85 : 105, color: theme.text }}>

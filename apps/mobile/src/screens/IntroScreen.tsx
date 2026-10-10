@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_ARTWORK, INTRO_BACKGROUNDS } from '../artwork';
+import { ANIMATIONS, USE_NATIVE_DRIVER } from '../design/motion';
 
 export function IntroScreen({ ready, onDone }: { readonly ready: boolean; readonly onDone: () => void }) {
   const fade = useRef(new Animated.Value(0)).current;
@@ -18,11 +19,14 @@ export function IntroScreen({ ready, onDone }: { readonly ready: boolean; readon
 
   useEffect(() => {
     if (!ready || reduceMotion === null || !loaded.start || !loaded.end) return;
-    fade.setValue(reduceMotion ? 1 : 0);
-    const animation = reduceMotion ? Animated.delay(600) : Animated.sequence([
-      Animated.delay(350),
-      Animated.timing(fade, { toValue: 1, duration: 1100, useNativeDriver: Platform.OS !== 'web' }),
-      Animated.delay(650),
+    // ANIMATION(introCrossfade): still for reduced motion or when the animation is turned off.
+    const still = reduceMotion || !ANIMATIONS.introCrossfade.enabled;
+    const { delayMs, ms, holdMs } = ANIMATIONS.introCrossfade;
+    fade.setValue(still ? 1 : 0);
+    const animation = still ? Animated.delay(600) : Animated.sequence([
+      Animated.delay(delayMs),
+      Animated.timing(fade, { toValue: 1, duration: ms, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.delay(holdMs),
     ]);
     animation.start(({ finished }) => { if (finished) onDone(); });
     return () => animation.stop();
