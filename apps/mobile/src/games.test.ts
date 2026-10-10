@@ -31,6 +31,21 @@ describe('game registry', () => {
 });
 
 describe('Tap Quest difficulty', () => {
+  it('passes a new pattern seed through to each game', async () => {
+    const { createGameTestHarness } = await import('@jimmyit/game-sdk/testing');
+    const first = await createGameTestHarness(tapQuestGame('precision', [], 101), { toy: false });
+    const second = await createGameTestHarness(tapQuestGame('precision', [], 102), { toy: false });
+    expect(first.run.getState().target).not.toEqual(second.run.getState().target);
+  });
+
+  it('passes generated target positions into a playable game', async () => {
+    const { createGameTestHarness } = await import('@jimmyit/game-sdk/testing');
+    const points = [{ x: 0.2, y: 0.2 }, { x: 0.8, y: 0.2 },
+      { x: 0.8, y: 0.8 }, { x: 0.2, y: 0.8 }] as const;
+    const game = tapQuestGame('precision', [], 101, points);
+    const h = await createGameTestHarness(game, { toy: false });
+    expect(h.run.getState().target).toMatchObject(points[0]);
+  });
   it('starts new players at level 1', () => {
     expect(tapQuestGame('precision', []).create).toBeTypeOf('function');
     expect(tapQuestGame('precision', []).id).toBe('tap-quest-precision');

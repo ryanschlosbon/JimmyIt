@@ -16,16 +16,28 @@ export interface TapQuestToy {
 
 export function TapQuestScreen({ theme, run, onStart, toy }: {
   readonly theme: Theme; readonly run: GameRunControls<TapQuestState, TapQuestAction>;
-  readonly onStart: (mode: TapQuestMode) => void; readonly toy: TapQuestToy;
+  readonly onStart: (mode: TapQuestMode) => Promise<'local' | 'gemini' | null>; readonly toy: TapQuestToy;
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 680;
   const [mode, setMode] = useState<TapQuestMode>('precision');
   const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
   const [stylusPaused, setStylusPaused] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [patternMessage, setPatternMessage] = useState<string | null>(null);
   const { status, saveStatus, state, pause, resume, submit } = run;
   const active = status === 'running' || status === 'paused';
   const stylusInJimmy = toy.connected && toy.stylusStowed;
+  const startPattern = () => {
+    if (starting) return;
+    setStylusPaused(false);
+    setStarting(true);
+    setPatternMessage(null);
+    onStart(mode).then(source => {
+      if (source) setPatternMessage(source === 'gemini' ? 'New Gemini pattern' : 'New offline pattern');
+    }).catch(() => setPatternMessage('Could not start this pattern. Please try again.'))
+      .finally(() => setStarting(false));
+  };
 
   // Leaving the screen or switching apps pauses the game; points are never lost.
   useEffect(() => {
@@ -120,9 +132,9 @@ export function TapQuestScreen({ theme, run, onStart, toy }: {
       </View>
 
       <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {!active && <Button theme={theme} label={status === 'finished' ? 'Play again' : 'Start'} icon="sparkle"
-          color={theme.yellow} onPress={() => { setStylusPaused(false); onStart(mode); }}
-          disabled={saveStatus === 'saving' || stylusInJimmy} />}
+        {!active && <Button theme={theme} label={starting ? 'Making pattern…' : status === 'finished' ? 'Play again' : 'Start'}
+          icon="sparkle" color={theme.yellow} onPress={startPattern}
+          disabled={starting || saveStatus === 'saving' || stylusInJimmy} />}
         {status === 'running' && <Button theme={theme} label="Pause" onPress={pause} />}
         {status === 'paused' && <Button theme={theme} label="Resume" icon="timer" color={theme.yellow}
           onPress={() => { setStylusPaused(false); resume(); }} disabled={stylusInJimmy} />}
@@ -134,6 +146,7 @@ export function TapQuestScreen({ theme, run, onStart, toy }: {
         {status === 'finished' && saveStatus === 'failed' && <Button theme={theme} label="Retry saving" icon="check"
           onPress={run.retrySave} />}
       </View>
+      {patternMessage && <View accessibilityLiveRegion="polite"><Body theme={theme} small>{patternMessage}</Body></View>}
     </View>
     <Body theme={theme} small>Take breaks whenever you like. Leaving this screen pauses the game.</Body>
   </View>;

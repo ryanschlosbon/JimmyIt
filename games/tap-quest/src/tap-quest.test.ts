@@ -33,6 +33,30 @@ describe('Tap Quest geometry and adaptation', () => {
 });
 
 describe('Tap Quest sessions', () => {
+  it('varies all four mode patterns between plays with reproducible seeds', async () => {
+    for (const mode of ['precision', 'calm', 'trace', 'memory'] as const) {
+      const first = await createGameTestHarness(createTapQuestGame({ mode, patternSeed: 101 }), { toy: false });
+      const second = await createGameTestHarness(createTapQuestGame({ mode, patternSeed: 102 }), { toy: false });
+      const repeat = await createGameTestHarness(createTapQuestGame({ mode, patternSeed: 101 }), { toy: false });
+      const pattern = (state: ReturnType<typeof first.run.getState>) => mode === 'trace' ? state.path
+        : mode === 'memory' ? state.sequence : state.target;
+      expect(pattern(first.run.getState())).not.toEqual(pattern(second.run.getState()));
+      expect(pattern(first.run.getState())).toEqual(pattern(repeat.run.getState()));
+    }
+  });
+
+  it('uses a validated generated layout for circle modes', async () => {
+    const points = [{ x: 0.2, y: 0.2 }, { x: 0.8, y: 0.2 },
+      { x: 0.8, y: 0.8 }, { x: 0.2, y: 0.8 }] as const;
+    const precision = await createGameTestHarness(createTapQuestGame({ mode: 'precision', patternPositions: points }),
+      { toy: false });
+    expect(precision.run.getState().target).toMatchObject(points[0]);
+    const memory = await createGameTestHarness(createTapQuestGame({ mode: 'memory', patternPositions: points }),
+      { toy: false });
+    expect(memory.run.getState().choices.map(({ x, y }) => ({ x, y }))).toEqual(points);
+    expect(() => createTapQuestGame({ mode: 'precision', patternPositions: [points[0], points[0],
+      points[2], points[3]] })).toThrow('overlap');
+  });
   it('scores precise and near-edge touches, ignores misses, and saves the completed record', async () => {
     const h = await createGameTestHarness(createTapQuestGame({ mode: 'precision', settings: { targetCount: 2 } }));
     const first = h.run.getState().target;
@@ -74,6 +98,28 @@ describe('Tap Quest sessions', () => {
     const path = h.run.getState().path;
     path.slice(0, 5).forEach((point, i) => h.run.submit(touch(point, i === 0 ? 'down' : 'move')));
     expect((await h.run.result).score).toBe(10);
+  });
+
+  it('cycles through eight trace shapes at varied positions inside the play area', async () => {
+    const h = await createGameTestHarness(createTapQuestGame({ mode: 'trace', patternSeed: 101,
+      settings: { targetCount: 8 } }), { toy: false });
+    const shapes = new Set<string>();
+    const centers = new Set<string>();
+    for (let target = 0; target < 8; target++) {
+      const path = h.run.getState().path;
+      expect(path).toHaveLength(7);
+      expect(path.every(({ x, y }) => x >= 0.12 && x <= 0.88 && y >= 0.12 && y <= 0.88)).toBe(true);
+      const first = path[0];
+      if (!first) throw new Error('trace path missing');
+      shapes.add(JSON.stringify(path.map(({ x, y }) => [Math.round((x - first.x) * 100),
+        Math.round((y - first.y) * 100)])));
+      centers.add(`${Math.round(path.reduce((sum, point) => sum + point.x, 0) * 100 / path.length)},` +
+        `${Math.round(path.reduce((sum, point) => sum + point.y, 0) * 100 / path.length)}`);
+      path.slice(0, 5).forEach((point, index) => h.run.submit(touch(point, index === 0 ? 'down' : 'move')));
+    }
+    expect(shapes.size).toBe(8);
+    expect(centers.size).toBeGreaterThan(3);
+    expect((await h.run.result).score).toBe(80);
   });
 
   it('requires memory targets in order and supports mode-specific calm completion', async () => {

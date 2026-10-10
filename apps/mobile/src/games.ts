@@ -4,7 +4,7 @@ import { createGameCatalog } from '@jimmyit/app-kit';
 import type { ScoreRecord } from '@jimmyit/core';
 import { freeDrawing, shapeChallenge } from '@jimmyit/game-drawing';
 import { createShapeRecognitionGame } from '@jimmyit/game-shape-recognition';
-import { createTapQuestGame, type RecentAttempt, type TapQuestMode } from '@jimmyit/game-tap-quest';
+import { createTapQuestGame, type Point, type RecentAttempt, type TapQuestMode } from '@jimmyit/game-tap-quest';
 import { createTimedPractice, TIMED_PRACTICE_DURATIONS_MS } from '@jimmyit/game-timed-practice';
 
 export type Activity = 'drawing' | 'shapes';
@@ -33,7 +33,8 @@ const MAX_TAP_QUEST_LEVEL = 5;
  * and lets the game adapt from their last five (at most one level per game).
  * `records` is newest first, as useScores() returns them.
  */
-export function tapQuestGame(mode: TapQuestMode, records: readonly ScoreRecord[]) {
+export function tapQuestGame(mode: TapQuestMode, records: readonly ScoreRecord[], patternSeed = 0,
+  patternPositions?: readonly Point[]) {
   const mine = records.filter((record) => record.gameId === `tap-quest-${mode}`).slice(0, 5).reverse();
   const lastLevel = mine[mine.length - 1]?.metrics.level ?? 1;
   const recentAttempts: RecentAttempt[] = mine
@@ -43,7 +44,7 @@ export function tapQuestGame(mode: TapQuestMode, records: readonly ScoreRecord[]
       completionRate: Math.min(1, (record.metrics.completionPercent ?? 0) / 100),
     }));
   const level = Math.max(1, Math.min(MAX_TAP_QUEST_LEVEL, Math.round(lastLevel)));
-  return createTapQuestGame({ mode, level, recentAttempts });
+  return createTapQuestGame({ mode, level, recentAttempts, patternSeed, patternPositions });
 }
 
 /** Titles and facts for menus and scoreboards, including games the toy plays by itself. */

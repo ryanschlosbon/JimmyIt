@@ -12,6 +12,7 @@ import type { TimedPracticeState } from '@jimmyit/game-timed-practice';
 import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
 import type { ScoreRecord } from '@jimmyit/core';
 import type { SaveStatus } from '@jimmyit/game-sdk';
+import { defaultAccessibilityPreferences } from '@jimmyit/ai';
 import { getTheme } from './theme';
 import { useJimmy } from './use-jimmy';
 import { DRAWING_GAMES, tapQuestGame, timedPracticeGame, type Activity } from './games';
@@ -72,6 +73,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const [fontsLoaded, fontError] = useFonts({ Baloo: Baloo2_700Bold, Poppins: Poppins_400Regular,
     PoppinsBold: Poppins_600SemiBold });
   const [screen, setScreen] = useState<Screen>('home');
+  const screenRef = useRef<Screen>('home');
   const [introDone, setIntroDone] = useState(false);
   const finishIntro = useCallback(() => setIntroDone(true), []);
   const timed = useGameRun<TimedPracticeState>();
@@ -86,6 +88,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const [rewardNewBest, setRewardNewBest] = useState(false);
   const [rewardFrom, setRewardFrom] = useState<'draw' | 'timed' | 'tapQuest'>('draw');
   const scroll = useRef<ScrollView>(null);
+  const tapQuestSeed = useRef(0);
   const { width } = useWindowDimensions();
   const compact = width < 680;
   useEffect(() => setupWebAccessibility(state.dark), [state.dark]);
@@ -105,7 +108,11 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     setDrafts(current => ({ ...current, shapes: NO_STROKES })); drawingRuns.shapes.clear();
   }, drawingSaveFailed);
 
-  const navigate = (next: Screen) => { setScreen(next); scroll.current?.scrollTo({ y: 0, animated: false }); };
+  const navigate = (next: Screen) => {
+    screenRef.current = next;
+    setScreen(next);
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  };
   const start = (next: Activity) => { setActivity(next); navigate('draw'); };
   const dispatch = (action: DrawingAction) => {
     const run = drawingRuns[activity];
@@ -124,7 +131,30 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   };
 
   // Tap Quest adapts its level from this child's recent Tap Quest games.
-  const startTapQuest = (mode: TapQuestMode) => tapQuest.start(tapQuestGame(mode, state.records), { tickMs: 100 });
+  const startTapQuest = async (mode: TapQuestMode): Promise<'local' | 'gemini' | null> => {
+    tapQuestSeed.current = tapQuestSeed.current === 0 ? Math.floor(Math.random() * 0x7fffffff) + 1
+      : (tapQuestSeed.current + 1) & 0x7fffffff;
+    const seed = tapQuestSeed.current;
+    let game = tapQuestGame(mode, state.records, seed);
+    let source: 'local' | 'gemini' = 'local';
+    if (mode !== 'trace' && state.aiSettings.generationEnabled && state.aiSettings.provider === 'gemini') {
+      const level = await state.aiService.generateLevel({ gameType: 'tapQuest', theme: 'garden', difficulty: 2,
+        accessibilityPreferences: defaultAccessibilityPreferences(), targetCount: 6,
+        availableInputControls: ['screenTouch'], variationSeed: seed });
+      if (level.targets.length >= 4) {
+        try {
+          game = tapQuestGame(mode, state.records, seed,
+            level.targets.map(({ x, y }) => ({ x, y })));
+          source = level.source;
+        } catch {
+          // A generated layout can be valid at its own radius yet overlap at this game's adapted radius.
+        }
+      }
+    }
+    if (screenRef.current !== 'tapQuest') return null;
+    tapQuest.start(game, { tickMs: 100 });
+    return source;
+  };
 
   const startTimed = (durationMs: number) => {
     try {

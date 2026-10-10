@@ -15,6 +15,7 @@
     "@expo-google-fonts/baloo-2": "^0.4.2",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@jimmyit/app-kit": "*",
+    "@jimmyit/ai": "*",
     "@jimmyit/ble-react-native": "*",
     "@jimmyit/core": "*",
     "@jimmyit/game-drawing": "*",
