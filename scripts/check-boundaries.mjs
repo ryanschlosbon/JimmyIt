@@ -12,6 +12,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RULES = {
   'packages/protocol': { internal: [], thirdParty: [] },
   'packages/core': { internal: ['@jimmyit/protocol'], thirdParty: [] },
+  'packages/ai': { internal: [], thirdParty: [] },
   'packages/fake-fidget': { internal: ['@jimmyit/protocol', '@jimmyit/core'], thirdParty: [] },
   'packages/ble-react-native': {
     internal: ['@jimmyit/protocol', '@jimmyit/core'],
@@ -41,7 +42,7 @@ const RULES = {
 };
 
 // Packages that must run unchanged in React Native, Node and tests.
-const PLATFORM_FREE = ['packages/protocol', 'packages/core', 'packages/fake-fidget', 'packages/game-sdk', 'packages/app-kit'];
+const PLATFORM_FREE = ['packages/protocol', 'packages/core', 'packages/ai', 'packages/fake-fidget', 'packages/game-sdk', 'packages/app-kit'];
 const FORBIDDEN_GLOBALS = [
   [/\bBuffer\b/, 'Buffer (Node only; use Uint8Array)'],
   [/\bprocess\./, 'process (Node only)'],

@@ -17,6 +17,10 @@ export interface TapQuestOptions {
   readonly allowDifficultyIncrease?: boolean;
   readonly settings?: Partial<Omit<DifficultySettings, 'level'>>;
   readonly feedback?: Partial<TapQuestFeedback>;
+  /** Reproducible variation chosen when a new play begins. */
+  readonly patternSeed?: number;
+  /** Validated target centers supplied by the app's optional level generator. */
+  readonly patternPositions?: readonly Point[];
 }
 
 export type TapQuestAction =
@@ -58,19 +62,47 @@ const POSITIONS: readonly Point[] = [
   { x: 0.23, y: 0.78 }, { x: 0.76, y: 0.76 }, { x: 0.5, y: 0.2 },
 ];
 
-function targetAt(index: number, settings: DifficultySettings): Circle {
-  const base = POSITIONS[index % POSITIONS.length] ?? POSITIONS[0];
-  if (!base) throw new RangeError('target positions are unavailable');
-  const shift = (Math.floor(index / POSITIONS.length) % 3 - 1) * (settings.targetSpacing - 0.23) * 0.4;
-  return { x: Math.max(0.15, Math.min(0.85, base.x + shift)), y: base.y, radius: settings.targetRadius };
+function unitNoise(seed: number, index: number, axis: number): number {
+  let value = (seed + Math.imul(index + 1, 0x9e3779b1) + axis * 0x85ebca6b) | 0;
+  value = Math.imul(value ^ (value >>> 16), 0x7feb352d);
+  value = Math.imul(value ^ (value >>> 15), 0x846ca68b);
+  return ((value ^ (value >>> 16)) >>> 0) / 0x100000000;
 }
 
-function tracePath(index: number): readonly Point[] {
-  const curved = index % 2 === 1;
-  return Array.from({ length: 7 }, (_, i) => ({
-    x: 0.16 + i * 0.11,
-    y: curved ? 0.5 - 0.19 * Math.sin(i * Math.PI / 6) : 0.48 + i * 0.018,
-  }));
+function targetAt(index: number, settings: DifficultySettings, seed: number,
+  positions: readonly Point[]): Circle {
+  const direction = Math.floor(seed / positions.length) % 2 === 0 ? 1 : -1;
+  const position = positions === POSITIONS
+    ? ((seed + direction * index) % positions.length + positions.length) % positions.length
+    : index % positions.length;
+  const base = positions[position] ?? positions[0];
+  if (!base) throw new RangeError('target positions are unavailable');
+  const shift = positions === POSITIONS
+    ? (Math.floor(index / positions.length) % 3 - 1) * (settings.targetSpacing - 0.23) * 0.4 : 0;
+  const jitterX = seed === 0 || positions !== POSITIONS ? 0 : (unitNoise(seed, index, 0) * 2 - 1) * 0.025;
+  const jitterY = seed === 0 || positions !== POSITIONS ? 0 : (unitNoise(seed, index, 1) * 2 - 1) * 0.025;
+  return { x: Math.max(0.15, Math.min(0.85, base.x + shift + jitterX)),
+    y: Math.max(0.15, Math.min(0.85, base.y + jitterY)), radius: settings.targetRadius };
+}
+
+function tracePath(index: number, seed: number): readonly Point[] {
+  const shape = (seed + index) % 8;
+  const offsetX = ((seed + index * 2) % 3 - 1) * 0.07;
+  const offsetY = ((Math.floor(seed / 3) + index * 2) % 3 - 1) * 0.07;
+  return Array.from({ length: 7 }, (_, anchor) => {
+    const t = anchor / 6;
+    const across = -0.3 + 0.6 * t;
+    let x = across;
+    let y = 0;
+    if (shape === 1) { x = 0; y = across; }
+    else if (shape === 2) { x = across * 0.93; y = -across * 0.93; }
+    else if (shape === 3) { x = across * 0.93; y = across * 0.93; }
+    else if (shape === 4) y = -0.22 * Math.sin(Math.PI * t);
+    else if (shape === 5) y = 0.22 * Math.sin(Math.PI * t);
+    else if (shape === 6) y = 0.16 * Math.sin(Math.PI * 2 * t);
+    else if (shape === 7) y = 0.26 * Math.abs(2 * t - 1) - 0.13;
+    return { x: 0.5 + offsetX + x, y: 0.5 + offsetY + y };
+  });
 }
 
 function checkedSettings(options: TapQuestOptions): DifficultySettings {
@@ -92,7 +124,22 @@ function checkedSettings(options: TapQuestOptions): DifficultySettings {
 export function createTapQuestGame(options: TapQuestOptions) {
   const { mode } = options;
   if (!(['precision', 'trace', 'memory', 'calm'] as const).includes(mode)) throw new RangeError('unknown mode');
+  const patternSeed = options.patternSeed ?? 0;
+  if (!Number.isInteger(patternSeed) || patternSeed < 0 || patternSeed > 0x7fffffff) {
+    throw new RangeError('invalid pattern seed');
+  }
   const settings = checkedSettings(options);
+  const positions = options.patternPositions ?? POSITIONS;
+  if (positions.length < 4 || positions.length > 12 || positions.some((point) =>
+    !Number.isFinite(point.x) || !Number.isFinite(point.y) ||
+    point.x < settings.targetRadius || point.x > 1 - settings.targetRadius ||
+    point.y < settings.targetRadius || point.y > 1 - settings.targetRadius)) {
+    throw new RangeError('invalid pattern positions');
+  }
+  if (options.patternPositions && positions.some((point, index) => positions.slice(index + 1).some((other) =>
+    Math.hypot(point.x - other.x, point.y - other.y) < settings.targetRadius * 2 + 0.015))) {
+    throw new RangeError('pattern positions overlap');
+  }
   const feedback: TapQuestFeedback = {
     haptics: options.feedback?.haptics ?? false,
     generousTiming: options.feedback?.generousTiming ?? true,
@@ -102,7 +149,8 @@ export function createTapQuestGame(options: TapQuestOptions) {
     throw new RangeError('invalid extra hit radius');
   }
   const count = mode === 'memory' ? settings.sequenceLength : settings.targetCount;
-  const sequence = Array.from({ length: settings.sequenceLength }, (_, i) => (i * 2 + Math.floor(i / 3)) % POSITIONS.length);
+  const sequence = Array.from({ length: settings.sequenceLength }, (_, i) =>
+    (i * 2 + Math.floor(i / 3) + patternSeed) % positions.length);
   return defineGame<TapQuestState, TapQuestAction>({
     id: `tap-quest-${mode}`,
     title: `Tap Quest: ${mode[0]?.toUpperCase() ?? ''}${mode.slice(1)}`,
@@ -131,9 +179,9 @@ export function createTapQuestGame(options: TapQuestOptions) {
         if (mode === 'trace') return null;
         if (mode === 'memory') {
           const shown = sequence[previewIndex()];
-          return showingMemory() && shown !== undefined ? targetAt(shown, settings) : null;
+          return showingMemory() && shown !== undefined ? targetAt(shown, settings, patternSeed, positions) : null;
         }
-        return targetAt(index, settings);
+        return targetAt(index, settings, patternSeed, positions);
       };
       const finishIfDone = () => {
         if (mode !== 'calm' && index >= count) {
@@ -162,10 +210,10 @@ export function createTapQuestGame(options: TapQuestOptions) {
             ? Math.max(0, windowMs - (effectiveMs() - targetStartedMs)) : null;
           return {
             mode, paused: pausedAt !== null, completed, target: completed ? null : currentTarget(),
-            path: mode === 'trace' && !completed ? tracePath(index) : [],
+            path: mode === 'trace' && !completed ? tracePath(index, patternSeed) : [],
             sequence: showingMemory() && !completed ? sequence : [],
             choices: mode === 'memory' && !completed
-              ? POSITIONS.map((_, choiceIndex) => targetAt(choiceIndex, settings)) : [],
+              ? positions.map((_, choiceIndex) => targetAt(choiceIndex, settings, patternSeed, positions)) : [],
             memoryPhase: mode === 'memory' ? (showingMemory() && !completed ? 'preview' : 'recall') : null,
             highlightIndex: showingMemory() && !completed ? previewIndex() : null,
             targetIndex: index, targetCount: count,
@@ -220,7 +268,7 @@ export function createTapQuestGame(options: TapQuestOptions) {
           }
           if (mode === 'trace') {
             if (phase === 'up') return;
-            const path = tracePath(index);
+            const path = tracePath(index, patternSeed);
             if (distanceToPath(point, path) > settings.targetRadius + feedback.extraHitRadius) return;
             path.forEach((anchor, anchorIndex) => {
               if (Math.hypot(point.x - anchor.x, point.y - anchor.y) <= settings.targetRadius + feedback.extraHitRadius) {
@@ -235,7 +283,7 @@ export function createTapQuestGame(options: TapQuestOptions) {
           }
           if (phase !== 'down') return;
           if (mode === 'memory' && showingMemory()) return;
-          const target = mode === 'memory' ? targetAt(sequence[index] ?? 0, settings) : currentTarget();
+          const target = mode === 'memory' ? targetAt(sequence[index] ?? 0, settings, patternSeed, positions) : currentTarget();
           if (!target) return;
           if (isCircleHit(point, target)) {
             reward(mode === 'calm' ? 5 : 10);
