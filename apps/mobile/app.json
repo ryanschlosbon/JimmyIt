@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Jimmy",
+    "slug": "jimmyit",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "android": { "package": "com.jimmyit.mobile" },
+    "web": { "name": "Jimmy — a little play, a lot of possibility", "bundler": "metro" }
+  }
+}

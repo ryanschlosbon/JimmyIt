@@ -1,0 +1,30 @@
+{
+  "name": "@jimmyit/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "export:web": "expo export --platform web"
+  },
+  "dependencies": {
+    "@expo-google-fonts/baloo-2": "^0.4.2",
+    "@expo-google-fonts/poppins": "^0.4.1",
+    "@jimmyit/core": "*",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.27",
+    "expo-font": "~57.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.0"
+  },
+  "devDependencies": { "@types/react": "~19.2.0", "@jimmyit/fake-fidget": "*" },
+  "engines": { "node": ">=22.13.0" }
+}

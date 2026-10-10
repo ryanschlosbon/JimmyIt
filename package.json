@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "games/*"
+    "games/*",
+    "apps/*"
   ],
   "scripts": {
     "test": "vitest run",
