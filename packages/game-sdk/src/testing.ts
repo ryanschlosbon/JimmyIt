@@ -13,8 +13,8 @@ import { createFakeFidget, type FakeFidget } from '@jimmyit/fake-fidget';
 import { type GameRun, startGame } from './game-runner';
 import type { GameDefinition } from './game-types';
 
-export interface GameTestHarness<TState> {
-  readonly run: GameRun<TState>;
+export interface GameTestHarness<TState, TAction = never> {
+  readonly run: GameRun<TState, TAction>;
   /** Drive the toy: press, tap, spin, turnScrew, squeeze… and inspect display/haptics. */
   readonly fidget: FakeFidget;
   readonly client: FidgetClient;
@@ -28,10 +28,10 @@ export interface GameTestHarness<TState> {
 /** 2026-01-01T00:00:00Z, so saved records have realistic timestamps. */
 const HARNESS_START_MS = Date.UTC(2026, 0, 1);
 
-export async function createGameTestHarness<TState>(
-  game: GameDefinition<TState>,
+export async function createGameTestHarness<TState, TAction = never>(
+  game: GameDefinition<TState, TAction>,
   options: { tickMs?: number } = {},
-): Promise<GameTestHarness<TState>> {
+): Promise<GameTestHarness<TState, TAction>> {
   const time = createManualTime(HARNESS_START_MS);
   const fidget = createFakeFidget({ clock: time.clock });
   const client = await connectFidgetClient(fidget.transport, { clock: time.clock, scheduler: time.scheduler });

@@ -1,0 +1,13 @@
+{
+  "name": "@jimmyit/game-shape-recognition",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless drawing recognition and activity analysis for a future shape game.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/game-sdk": "*"
+  }
+}

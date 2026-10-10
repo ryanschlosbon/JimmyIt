@@ -23,16 +23,18 @@ export interface GameSession {
  * A game's rules, with no UI. `TState` is whatever the game's view needs to
  * draw; the view reads it with GameRun.getState() and re-renders on subscribe().
  */
-export interface GameLogic<TState> {
+export interface GameLogic<TState, TAction = never> {
   getState(): TState;
   onStart?(): void;
   onEvent?(event: FidgetEvent): void;
+  /** Handles a game-specific action from its view, such as a completed drawing. */
+  onAction?(action: TAction): void;
   /** Called every tick (default 50 ms) with time since start. */
   onTick?(elapsedMs: number): void;
   onFinish?(): void;
 }
 
-export interface GameDefinition<TState> {
+export interface GameDefinition<TState, TAction = never> {
   /** kebab-case, unique, never changed once released (saved scores use it). */
   readonly id: string;
   readonly title: string;
@@ -41,7 +43,7 @@ export interface GameDefinition<TState> {
   /** Fixed length, or null if the game calls session.finish() itself. */
   readonly durationMs: number | null;
   readonly starThresholds: StarThresholds;
-  create(session: GameSession): GameLogic<TState>;
+  create(session: GameSession): GameLogic<TState, TAction>;
 }
 
 /** The subset of FidgetClient a running game uses. FidgetClient satisfies it. */

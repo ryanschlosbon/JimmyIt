@@ -30,12 +30,14 @@ export interface StartGameOptions {
 export type GameStatus = 'running' | 'finished';
 
 /** One play of one game. The frontend's game screen holds this. */
-export interface GameRun<TState> {
+export interface GameRun<TState, TAction = never> {
   readonly gameId: string;
   readonly status: GameStatus;
   getState(): TState;
   getScore(): ScoreSnapshot;
   elapsedMs(): number;
+  /** Sends a game-specific action to the running game; ignored after completion. */
+  submit(action: TAction): void;
   /** Called whenever state, score or status may have changed. */
   subscribe(listener: Listener<void>): Unsubscribe;
   /** Ends early because the child stopped; saved with completed = false. */
@@ -46,7 +48,9 @@ export interface GameRun<TState> {
 
 const DEFAULT_TICK_MS = 50;
 
-export function startGame<TState>(game: GameDefinition<TState>, options: StartGameOptions): GameRun<TState> {
+export function startGame<TState, TAction = never>(
+  game: GameDefinition<TState, TAction>, options: StartGameOptions,
+): GameRun<TState, TAction> {
   const { device, repository } = options;
   const clock = options.clock ?? systemClock;
   const scheduler = options.scheduler ?? systemScheduler;
@@ -150,6 +154,11 @@ export function startGame<TState>(game: GameDefinition<TState>, options: StartGa
     getState: () => logic.getState(),
     getScore: () => score.snapshot(),
     elapsedMs,
+    submit(action) {
+      if (status !== 'running') return;
+      logic.onAction?.(action);
+      changes.emit();
+    },
     subscribe: (listener) => changes.subscribe(listener),
     quit() {
       end(false);
