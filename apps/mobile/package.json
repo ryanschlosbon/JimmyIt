@@ -14,17 +14,30 @@
   "dependencies": {
     "@expo-google-fonts/baloo-2": "^0.4.2",
     "@expo-google-fonts/poppins": "^0.4.1",
+    "@jimmyit/app-kit": "*",
+    "@jimmyit/ble-react-native": "*",
     "@jimmyit/core": "*",
+    "@jimmyit/game-drawing": "*",
+    "@jimmyit/game-sdk": "*",
+    "@jimmyit/game-shape-recognition": "*",
+    "@jimmyit/game-tap-quest": "*",
+    "@jimmyit/game-timed-practice": "*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.27",
     "expo-font": "~57.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-ble-plx": "^3.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.0"
   },
-  "devDependencies": { "@types/react": "~19.2.0", "@jimmyit/fake-fidget": "*" },
-  "engines": { "node": ">=22.13.0" }
+  "devDependencies": {
+    "@jimmyit/dev-toy": "*",
+    "@types/react": "~19.2.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
 }

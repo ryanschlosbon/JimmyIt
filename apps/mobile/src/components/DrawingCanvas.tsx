@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { View, type GestureResponderEvent, type LayoutRectangle } from 'react-native';
 import Svg, { Circle, Path, Rect, Pattern, Defs } from 'react-native-svg';
-import { strokeToPath, type DrawingAction, type Stroke } from '../drawing';
+import { strokeToPath, type DrawingAction, type Stroke } from '@jimmyit/game-drawing';
 
 export function DrawingCanvas({ strokes, dispatch, color, brushSize, shapes, dark, disabled }: {
   readonly strokes: readonly Stroke[]; readonly dispatch: (action: DrawingAction) => void;

@@ -12,7 +12,7 @@
         "pressed": 0,
         "spinnerTotal": 0,
         "screwTotal": 0,
-        "squeezeRaw": 0,
+        "reserved": 0,
         "timeMs": 1000,
         "batteryPercent": 87,
         "flags": 1
@@ -28,24 +28,40 @@
         "pressed": 1,
         "spinnerTotal": -5000,
         "screwTotal": -3,
-        "squeezeRaw": 2048,
+        "reserved": 2048,
         "timeMs": 65535,
         "batteryPercent": 255,
         "flags": 6
+      }
+    },
+    {
+      "name": "awaiting approval, charging, stylus stowed",
+      "hex": "07 01 00 01 00 00 00 10 00 00 0c 00 00 00 f4 01 2a 0a",
+      "fields": {
+        "seq": 7,
+        "mode": 1,
+        "switches": 256,
+        "pressed": 0,
+        "spinnerTotal": 4096,
+        "screwTotal": 12,
+        "reserved": 0,
+        "timeMs": 500,
+        "batteryPercent": 42,
+        "flags": 10
       }
     }
   ],
   "info": [
     {
       "name": "typical",
-      "hex": "01 00 01 00 ef be ad de 0f 00 2a 00 00 00 20 00",
+      "hex": "01 00 01 00 ef be ad de 3f 00 2a 00 00 00 20 00",
       "fields": {
         "protocolVersion": 1,
         "firmwareMajor": 0,
         "firmwareMinor": 1,
         "firmwarePatch": 0,
         "deviceId": 3735928559,
-        "capabilities": 15,
+        "capabilities": 63,
         "newestRecordId": 42,
         "storedRecordCount": 32
       }
@@ -82,6 +98,33 @@
         "type": "error",
         "code": 1,
         "opcode": 153
+      }
+    },
+    {
+      "name": "scoreEvent milestone from Free Play",
+      "hex": "03 03 01 d2 00 00 00 c8 00 00 00",
+      "fields": {
+        "type": "scoreEvent",
+        "kind": 3,
+        "modeId": 1,
+        "score": 210,
+        "value": 200
+      }
+    },
+    {
+      "name": "approval waiting",
+      "hex": "04 02",
+      "fields": {
+        "type": "approval",
+        "status": 2
+      }
+    },
+    {
+      "name": "approval accepted",
+      "hex": "04 01",
+      "fields": {
+        "type": "approval",
+        "status": 1
       }
     }
   ],
@@ -171,6 +214,34 @@
         "type": "setBest",
         "modeId": 2,
         "score": 150
+      }
+    },
+    {
+      "name": "hello",
+      "hex": "03 cd ab 34 12 52 79 61 6e 27 73 20 50 69 78 65 6c",
+      "fields": {
+        "type": "hello",
+        "appId": 305441741,
+        "name": "Ryan's Pixel"
+      }
+    },
+    {
+      "name": "hello without a name",
+      "hex": "03 07 00 00 00",
+      "fields": {
+        "type": "hello",
+        "appId": 7,
+        "name": ""
+      }
+    },
+    {
+      "name": "scoreEvent newBest",
+      "hex": "24 04 04 01 00 00 fa 00 00 00",
+      "fields": {
+        "type": "scoreEvent",
+        "kind": 4,
+        "score": 260,
+        "value": 250
       }
     }
   ]

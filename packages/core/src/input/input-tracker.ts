@@ -3,7 +3,6 @@ import {
   FidgetMode,
   InputFlag,
   type InputPacket,
-  SHARED_DEFAULTS,
   SPINNER_COUNTS_PER_TURN,
   SWITCH_IDS,
   SwitchBit,
@@ -11,20 +10,6 @@ import {
 } from '@jimmyit/protocol';
 import { type Clock, systemClock } from '../util/time';
 import { type FidgetEvent, type FidgetModeState, type FidgetState, INITIAL_FIDGET_STATE } from './types';
-
-export interface InputConfig {
-  readonly squeezeRawMin: number;
-  readonly squeezeRawMax: number;
-  readonly squeezeOnLevel: number;
-  readonly squeezeOffLevel: number;
-  /** Smallest level change that produces a `squeeze` event. */
-  readonly squeezeLevelStep: number;
-}
-
-export const DEFAULT_INPUT_CONFIG: InputConfig = {
-  ...SHARED_DEFAULTS,
-  squeezeLevelStep: 0.02,
-};
 
 export interface InputStats {
   readonly packets: number;
@@ -38,12 +23,6 @@ export interface InputTracker {
   /** Feeds one packet; returns the events it produced, in order. */
   push(packet: InputPacket): readonly FidgetEvent[];
   reset(): void;
-}
-
-export function squeezeLevelFromRaw(raw: number, config: InputConfig = DEFAULT_INPUT_CONFIG): number {
-  const span = config.squeezeRawMax - config.squeezeRawMin;
-  const level = (raw - config.squeezeRawMin) / span;
-  return Math.min(1, Math.max(0, level));
 }
 
 export function modeFromWire(mode: number): FidgetModeState {
@@ -61,8 +40,7 @@ function angleFromTotal(spinnerTotal: number): number {
   return (counts * 360) / SPINNER_COUNTS_PER_TURN;
 }
 
-export function createInputTracker(options: { config?: Partial<InputConfig>; clock?: Clock } = {}): InputTracker {
-  const config: InputConfig = { ...DEFAULT_INPUT_CONFIG, ...options.config };
+export function createInputTracker(options: { clock?: Clock } = {}): InputTracker {
   const clock = options.clock ?? systemClock;
 
   let state: FidgetState = INITIAL_FIDGET_STATE;
@@ -72,8 +50,6 @@ export function createInputTracker(options: { config?: Partial<InputConfig>; clo
   // Fidget time unwrapped from the 16-bit timeMs field; used for hold durations.
   let deviceTimeMs = 0;
   let downAtDeviceMs: Partial<Record<SwitchId, number>> = {};
-  let squeezeStartDeviceMs = 0;
-  let lastEmittedLevel = 0;
 
   function switchesFrom(bits: number): Record<SwitchId, boolean> {
     const out = { ...INITIAL_FIDGET_STATE.switches };
@@ -81,13 +57,12 @@ export function createInputTracker(options: { config?: Partial<InputConfig>; clo
     return out;
   }
 
-  function buildState(packet: InputPacket, totalDeg: number, position: number, level: number, active: boolean, at: number): FidgetState {
+  function buildState(packet: InputPacket, totalDeg: number, position: number, at: number): FidgetState {
     return {
       mode: modeFromWire(packet.mode),
       switches: switchesFrom(packet.switches),
       spinner: { angleDeg: angleFromTotal(packet.spinnerTotal), totalDeg },
       screw: { position },
-      squeeze: { raw: packet.squeezeRaw, level, active },
       batteryPercent: packet.batteryPercent === BATTERY_UNKNOWN ? null : packet.batteryPercent,
       charging: (packet.flags & InputFlag.charging) !== 0,
       clockSet: (packet.flags & InputFlag.clockSet) !== 0,
@@ -102,11 +77,7 @@ export function createInputTracker(options: { config?: Partial<InputConfig>; clo
     for (const id of SWITCH_IDS) {
       if ((packet.switches & (1 << SwitchBit[id])) !== 0) downAtDeviceMs[id] = 0;
     }
-    const level = squeezeLevelFromRaw(packet.squeezeRaw, config);
-    const active = level >= config.squeezeOnLevel;
-    squeezeStartDeviceMs = 0;
-    lastEmittedLevel = level;
-    state = buildState(packet, 0, 0, level, active, at);
+    state = buildState(packet, 0, 0, at);
     previous = packet;
     return [];
   }
@@ -169,27 +140,11 @@ export function createInputTracker(options: { config?: Partial<InputConfig>; clo
       events.push({ type: 'screw', deltaDetents: screwDelta, position, at });
     }
 
-    const level = squeezeLevelFromRaw(packet.squeezeRaw, config);
-    const reachedEnd = level !== lastEmittedLevel && (level === 0 || level === 1);
-    if (Math.abs(level - lastEmittedLevel) >= config.squeezeLevelStep || reachedEnd) {
-      lastEmittedLevel = level;
-      events.push({ type: 'squeeze', level, at });
-    }
-    let active = state.squeeze.active;
-    if (!active && level >= config.squeezeOnLevel) {
-      active = true;
-      squeezeStartDeviceMs = deviceTimeMs;
-      events.push({ type: 'squeezeStart', level, at });
-    } else if (active && level <= config.squeezeOffLevel) {
-      active = false;
-      events.push({ type: 'squeezeEnd', heldMs: deviceTimeMs - squeezeStartDeviceMs, at });
-    }
-
     if (packet.mode !== prev.mode) {
       events.push({ type: 'modeChange', mode: modeFromWire(packet.mode), at });
     }
 
-    state = buildState(packet, totalDeg, position, level, active, at);
+    state = buildState(packet, totalDeg, position, at);
     previous = packet;
     return events;
   }

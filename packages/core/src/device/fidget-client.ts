@@ -1,4 +1,5 @@
 import {
+  ApprovalStatus,
   Capability,
   type CapabilityName,
   type Command,
@@ -15,9 +16,12 @@ import {
   ProtocolError,
   RecordFlag,
   type RecordMessage,
+  ScoreEventKind,
 } from '@jimmyit/protocol';
-import { createInputTracker, type InputConfig, type InputStats } from '../input/input-tracker';
+import { createInputTracker, type InputStats } from '../input/input-tracker';
 import type { FidgetEvent, FidgetState } from '../input/types';
+import { gameIdForBasicMode } from '../scoring/basic-modes';
+import { type ScoreEvent, scoreEventKindFromWire } from '../scoring/score-events';
 import { formatDeviceId } from '../scoring/score-records';
 import type { Stars } from '../scoring/types';
 import { createEmitter, type Listener, type Unsubscribe } from '../util/emitter';
@@ -70,6 +74,8 @@ export interface FidgetClient {
   onRecord(listener: Listener<FidgetRecord>): Unsubscribe;
   onDeviceError(listener: Listener<FidgetDeviceError>): Unsubscribe;
   onDisconnect(listener: Listener<Error | null>): Unsubscribe;
+  /** Moments in a game the toy is running by itself (source 'toy'), as they happen. */
+  onScoreEvent(listener: Listener<ScoreEvent>): Unsubscribe;
 
   haptic(...effects: number[]): Promise<void>;
   feedback(name: FeedbackName): Promise<void>;
@@ -81,6 +87,8 @@ export interface FidgetClient {
   /** Sends the app's current time so fidget records get real timestamps. */
   syncClock(): Promise<void>;
   setBest(modeId: number, score: number): Promise<void>;
+  /** Asks the toy to celebrate an app game's moment (animation + haptic). No-op on toys without scoreEvents. */
+  sendScoreEvent(event: Pick<ScoreEvent, 'kind' | 'score' | 'value'>): Promise<void>;
 
   /** Stored fidget records with recordId > afterRecordId, oldest first. */
   fetchRecords(afterRecordId: number): Promise<readonly FidgetRecord[]>;
@@ -92,10 +100,17 @@ export interface FidgetClient {
 export interface FidgetClientOptions {
   readonly clock?: Clock;
   readonly scheduler?: Scheduler;
-  readonly input?: Partial<InputConfig>;
   readonly requestTimeoutMs?: number;
   /** Send setTime right after connecting. Default true. */
   readonly syncClockOnConnect?: boolean;
+  /** This install's id for the toy's "connect?" question; keep it stable so the toy remembers the phone. */
+  readonly appId?: number;
+  /** Shown on the toy's screen: "CONNECT TO <appName>?" (15 chars). */
+  readonly appName?: string;
+  /** How long to wait for the child to answer on the toy. Default 45 s. */
+  readonly approvalTimeoutMs?: number;
+  /** Called when the toy is asking the child (show "Say yes on Jimmy"). */
+  readonly onApprovalPending?: () => void;
 }
 
 export class ProtocolVersionMismatchError extends Error {
@@ -114,6 +129,19 @@ export class FidgetDisconnectedError extends Error {
 
 export class FidgetTimeoutError extends Error {
   override name = 'FidgetTimeoutError';
+}
+
+/** The child said no on the toy (or didn't answer). */
+export class FidgetDeclinedError extends Error {
+  override name = 'FidgetDeclinedError';
+  constructor() {
+    super('the child said no on the toy');
+  }
+}
+
+/** A random 32-bit app id, for the toy to remember this phone by. */
+export function createAppId(random: () => number = Math.random): number {
+  return Math.floor(random() * 0xffffffff) >>> 0;
 }
 
 function toFidgetInfo(raw: DeviceInfo): FidgetInfo {
@@ -159,14 +187,17 @@ export async function connectFidgetClient(transport: FidgetTransport, options: F
   if (rawInfo.protocolVersion !== PROTOCOL_VERSION) throw new ProtocolVersionMismatchError(rawInfo.protocolVersion);
   let info = toFidgetInfo(rawInfo);
 
-  const tracker = createInputTracker({ config: options.input ?? {}, clock });
+  const tracker = createInputTracker({ clock });
   const states = createEmitter<FidgetState>();
   const events = createEmitter<FidgetEvent>();
   const records = createEmitter<FidgetRecord>();
   const deviceErrors = createEmitter<FidgetDeviceError>();
   const disconnects = createEmitter<Error | null>();
+  const toyScoreEvents = createEmitter<ScoreEvent>();
 
   let connected = true;
+  let approvalReply: ((status: number) => void) | null = null;
+  let approvalAbort: ((error: Error) => void) | null = null;
   let pendingFetch: {
     afterRecordId: number;
     collected: FidgetRecord[];
@@ -205,6 +236,22 @@ export async function connectFidgetClient(transport: FidgetTransport, options: F
       case 'syncDone':
         pendingFetch?.finish(null);
         break;
+      case 'scoreEvent': {
+        const kind = scoreEventKindFromWire(message.kind);
+        if (kind) {
+          toyScoreEvents.emit({
+            kind,
+            gameId: gameIdForBasicMode(message.modeId),
+            source: 'toy',
+            score: message.score,
+            value: message.value,
+          });
+        }
+        break;
+      }
+      case 'approval':
+        approvalReply?.(message.status);
+        break;
       case 'error':
         deviceErrors.emit({ kind: 'fidgetError', code: message.code, opcode: message.opcode });
         if (message.opcode === CommandOpcode.syncRequest) {
@@ -214,13 +261,8 @@ export async function connectFidgetClient(transport: FidgetTransport, options: F
     }
   }
 
-  // Baseline from the current value before notifications start.
-  tracker.push(decodeInputPacket(await transport.read('input')));
-
-  const subscriptions: Unsubscribe[] = [
-    transport.subscribe('input', handleInput),
-    transport.subscribe('message', handleMessage),
-  ];
+  // Messages first, so the toy's answer to hello can't be missed.
+  const subscriptions: Unsubscribe[] = [transport.subscribe('message', handleMessage)];
   subscriptions.push(
     transport.onDisconnect((error) => {
       if (!connected) return;
@@ -233,11 +275,54 @@ export async function connectFidgetClient(transport: FidgetTransport, options: F
     connected = false;
     for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
     pendingFetch?.finish(new FidgetDisconnectedError());
+    approvalAbort?.(new FidgetDisconnectedError());
   }
 
   async function send(command: Command): Promise<void> {
     if (!connected) throw new FidgetDisconnectedError();
     await transport.write('command', encodeCommand(command));
+  }
+
+  // PROTOCOL.md "Connecting": the toy asks the child before it serves this phone.
+  async function requestApproval(): Promise<void> {
+    const timeoutMs = options.approvalTimeoutMs ?? 45_000;
+    const status = await new Promise<number>((resolve, reject) => {
+      const done = () => {
+        cancelTimeout();
+        approvalReply = null;
+        approvalAbort = null;
+      };
+      const cancelTimeout = scheduler.after(timeoutMs, () => {
+        done();
+        reject(new FidgetTimeoutError(`no answer on the toy within ${timeoutMs} ms`));
+      });
+      approvalReply = (reply) => {
+        if (reply === ApprovalStatus.waiting) {
+          options.onApprovalPending?.();
+          return;
+        }
+        done();
+        resolve(reply);
+      };
+      approvalAbort = (error) => {
+        done();
+        reject(error);
+      };
+      send({ type: 'hello', appId: options.appId ?? createAppId(), name: options.appName ?? 'Jimmy app' }).catch(
+        (error: Error) => approvalAbort?.(error),
+      );
+    });
+    if (status !== ApprovalStatus.accepted) throw new FidgetDeclinedError();
+  }
+
+  try {
+    if (info.capabilities.has('approval')) await requestApproval();
+    // Baseline from the current value before notifications start.
+    tracker.push(decodeInputPacket(await transport.read('input')));
+    subscriptions.push(transport.subscribe('input', handleInput));
+  } catch (error) {
+    if (connected) teardown();
+    throw error;
   }
 
   const client: FidgetClient = {
@@ -255,6 +340,7 @@ export async function connectFidgetClient(transport: FidgetTransport, options: F
     onRecord: (listener) => records.subscribe(listener),
     onDeviceError: (listener) => deviceErrors.subscribe(listener),
     onDisconnect: (listener) => disconnects.subscribe(listener),
+    onScoreEvent: (listener) => toyScoreEvents.subscribe(listener),
 
     haptic: (...effects) => send({ type: 'haptic', effects }),
     feedback: (name) => send({ type: 'haptic', effects: Feedback[name] }),
@@ -265,6 +351,10 @@ export async function connectFidgetClient(transport: FidgetTransport, options: F
     setMode: (mode) => send({ type: 'setMode', mode: FidgetMode[mode] }),
     syncClock: () => send({ type: 'setTime', unixSeconds: Math.floor(clock.now() / 1000) }),
     setBest: (modeId, score) => send({ type: 'setBest', modeId, score }),
+    async sendScoreEvent(event) {
+      if (!info.capabilities.has('scoreEvents')) return;
+      await send({ type: 'scoreEvent', kind: ScoreEventKind[event.kind], score: event.score, value: event.value });
+    },
 
     fetchRecords(afterRecordId) {
       if (pendingFetch) return Promise.reject(new Error('a record fetch is already running'));

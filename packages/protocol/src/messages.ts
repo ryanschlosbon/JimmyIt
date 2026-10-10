@@ -1,5 +1,5 @@
 import { createByteReader, createByteWriter, ProtocolError } from './bytes';
-import { MessageType } from './constants';
+import { ApprovalStatus, MessageType } from './constants';
 
 /** Fidget → app message, wire-faithful. See PROTOCOL.md "message". */
 export type FidgetMessage =
@@ -14,9 +14,18 @@ export type FidgetMessage =
       readonly actions: number;
     }
   | { readonly type: 'syncDone'; readonly newestRecordId: number; readonly sentCount: number }
+  | {
+      readonly type: 'scoreEvent';
+      readonly kind: number;
+      readonly modeId: number;
+      readonly score: number;
+      readonly value: number;
+    }
+  | { readonly type: 'approval'; readonly status: number }
   | { readonly type: 'error'; readonly code: number; readonly opcode: number };
 
 export type RecordMessage = Extract<FidgetMessage, { type: 'record' }>;
+export type ScoreEventMessage = Extract<FidgetMessage, { type: 'scoreEvent' }>;
 
 export function decodeMessage(bytes: Uint8Array): FidgetMessage {
   const r = createByteReader(bytes, 'message');
@@ -37,6 +46,15 @@ export function decodeMessage(bytes: Uint8Array): FidgetMessage {
       break;
     case MessageType.syncDone:
       message = { type: 'syncDone', newestRecordId: r.u32(), sentCount: r.u16() };
+      break;
+    case MessageType.scoreEvent:
+      message = { type: 'scoreEvent', kind: r.u8(), modeId: r.u8(), score: r.u32(), value: r.u32() };
+      break;
+    case MessageType.approval:
+      message = { type: 'approval', status: r.u8() };
+      if (!(Object.values(ApprovalStatus) as number[]).includes(message.status)) {
+        throw new ProtocolError(`unknown approval status ${message.status}`);
+      }
       break;
     case MessageType.error:
       message = { type: 'error', code: r.u8(), opcode: r.u8() };
@@ -64,6 +82,15 @@ export function encodeMessage(message: FidgetMessage): Uint8Array {
         .finish();
     case 'syncDone':
       return w.u32(message.newestRecordId, 'newestRecordId').u16(message.sentCount, 'sentCount').finish();
+    case 'scoreEvent':
+      return w
+        .u8(message.kind, 'kind')
+        .u8(message.modeId, 'modeId')
+        .u32(message.score, 'score')
+        .u32(message.value, 'value')
+        .finish();
+    case 'approval':
+      return w.u8(message.status, 'status').finish();
     case 'error':
       return w.u8(message.code, 'code').u8(message.opcode, 'opcode').finish();
   }

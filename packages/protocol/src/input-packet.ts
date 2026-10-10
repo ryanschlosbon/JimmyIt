@@ -9,7 +9,8 @@ export interface InputPacket {
   readonly pressed: number;
   readonly spinnerTotal: number;
   readonly screwTotal: number;
-  readonly squeezeRaw: number;
+  /** Reserved (was the squeeze sensor, removed from the toy). Always 0. */
+  readonly reserved: number;
   readonly timeMs: number;
   readonly batteryPercent: number;
   readonly flags: number;
@@ -27,7 +28,7 @@ export function decodeInputPacket(bytes: Uint8Array): InputPacket {
     pressed: r.u16(),
     spinnerTotal: r.i32(),
     screwTotal: r.i16(),
-    squeezeRaw: r.u16(),
+    reserved: r.u16(),
     timeMs: r.u16(),
     batteryPercent: r.u8(),
     flags: r.u8(),
@@ -42,7 +43,7 @@ export function encodeInputPacket(packet: InputPacket): Uint8Array {
     .u16(packet.pressed, 'pressed')
     .i32(packet.spinnerTotal, 'spinnerTotal')
     .i16(packet.screwTotal, 'screwTotal')
-    .u16(packet.squeezeRaw, 'squeezeRaw')
+    .u16(packet.reserved, 'reserved')
     .u16(packet.timeMs, 'timeMs')
     .u8(packet.batteryPercent, 'batteryPercent')
     .u8(packet.flags, 'flags')

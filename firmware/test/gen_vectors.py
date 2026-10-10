@@ -8,7 +8,13 @@ codec. Usage: gen_vectors.py <vectors.json> <output.h>
 import json
 import sys
 
-STRUCTS = {"record": "RecordMessage", "syncDone": "SyncDoneMessage", "error": "ErrorMessage"}
+STRUCTS = {
+    "record": "RecordMessage",
+    "syncDone": "SyncDoneMessage",
+    "scoreEvent": "ScoreEventMessage",
+    "approval": "ApprovalMessage",
+    "error": "ErrorMessage",
+}
 
 
 def const_name(namespace, name):

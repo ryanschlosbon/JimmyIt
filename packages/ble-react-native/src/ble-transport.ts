@@ -39,8 +39,12 @@ export function scanForFidgets(
 }
 
 /** Connects and returns a transport ready for connectFidgetClient(). */
-export async function connectToFidget(manager: BleManagerLike, deviceId: string): Promise<FidgetTransport> {
-  const connected = await manager.connectToDevice(deviceId);
+export async function connectToFidget(
+  manager: BleManagerLike,
+  deviceId: string,
+  options: { timeoutMs?: number } = {},
+): Promise<FidgetTransport> {
+  const connected = await manager.connectToDevice(deviceId, options.timeoutMs ? { timeout: options.timeoutMs } : undefined);
   const device = await connected.discoverAllServicesAndCharacteristics();
   return createBleTransport(manager, device);
 }

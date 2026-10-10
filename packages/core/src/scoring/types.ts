@@ -9,7 +9,7 @@ export type Stars = 0 | 1 | 2 | 3;
 export interface ScoreRecord {
   /** Unique and stable: re-saving the same session is a no-op. */
   readonly id: string;
-  /** kebab-case game id, e.g. "squeeze-hold" or "fidget-spin-count". */
+  /** kebab-case game id, e.g. "timed-motor-practice" or "fidget-spin-count". */
   readonly gameId: string;
   readonly source: ScoreSource;
   /** 8-hex-digit fidget id, or null if no fidget was connected. */
@@ -26,7 +26,7 @@ export interface ScoreRecord {
   readonly completed: boolean;
   /** True if this beat every earlier score for the same gameId. */
   readonly newBest: boolean;
-  /** How many interactions the child made: presses, turns, squeezes. */
+  /** How many interactions the child made: presses, spins, screw turns. */
   readonly actions: number;
   /** Game-specific numbers, camelCase keys, e.g. { longestHoldMs: 4200 }. */
   readonly metrics: Readonly<Record<string, number>>;

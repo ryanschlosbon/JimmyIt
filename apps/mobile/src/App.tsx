@@ -5,35 +5,68 @@ import { useFonts } from 'expo-font';
 import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2/700Bold';
 import { Poppins_400Regular } from '@expo-google-fonts/poppins/400Regular';
 import { Poppins_600SemiBold } from '@expo-google-fonts/poppins/600SemiBold';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createJimmyServices, JimmyServicesProvider, ToyNotConnectedError, useGameRun } from '@jimmyit/app-kit';
+import { drawingReducer, type DrawingAction, type DrawingGameAction, type DrawingGameState, type Stroke } from '@jimmyit/game-drawing';
+import type { TimedPracticeState } from '@jimmyit/game-timed-practice';
+import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
+import type { ScoreRecord } from '@jimmyit/core';
+import type { SaveStatus } from '@jimmyit/game-sdk';
 import { getTheme } from './theme';
 import { useJimmy } from './use-jimmy';
-import { drawingReducer, type DrawingAction, type Stroke } from './drawing';
-import type { Activity } from './progress';
+import { DRAWING_GAMES, tapQuestGame, timedPracticeGame, type Activity } from './games';
+import { createToySetup, loadDevToyPanel } from './toy-connector';
+import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { HomeScreen } from './screens/HomeScreen';
 import { DrawingScreen } from './screens/DrawingScreen';
 import { RewardsScreen } from './screens/RewardsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { IntroScreen } from './screens/IntroScreen';
-import { TimedScreen } from './screens/TimedScreen';
-import { createTimedChallenge, type TimedResult } from './timed-challenge';
+import { TimedScreen, type VirtualToy } from './screens/TimedScreen';
+import { TapQuestScreen } from './screens/TapQuestScreen';
 import { Body, Button, Eyebrow, Heading } from './components/Controls';
 import { Icon, type IconName } from './components/Icon';
 import { Jimmy } from './components/Jimmy';
 import { setupWebAccessibility } from './web-accessibility';
 
-type Screen = 'home' | 'draw' | 'rewards' | 'settings' | 'timed';
-interface Draft { readonly id: string; readonly startedAtMs: number | null; readonly strokes: readonly Stroke[] }
+type Screen = 'home' | 'draw' | 'rewards' | 'settings' | 'timed' | 'tapQuest';
+const NO_STROKES: readonly Stroke[] = [];
+/** Game screens reached from Home; the Home tab stays highlighted on them. */
+const isActivity = (screen: Screen) => screen === 'timed' || screen === 'tapQuest';
+const DRAWING_TICK_MS = 1000; // drawing has no clock to update; tick slowly
 
-function newDraft(): Draft {
-  const startedAtMs = Date.now();
-  return { id: `drawing-${startedAtMs}-${Math.random().toString(36).slice(2)}`, startedAtMs: null, strokes: [] };
+/** Calls onSaved once for each saved record, and onFailed when a save fails. */
+function useRunOutcome(run: { readonly record: ScoreRecord | null; readonly saveStatus: SaveStatus },
+  onSaved: (record: ScoreRecord) => void, onFailed: () => void) {
+  const latest = useRef({ onSaved, onFailed });
+  latest.current = { onSaved, onFailed };
+  const shown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!run.record || shown.current === run.record.id) return;
+    shown.current = run.record.id;
+    latest.current.onSaved(run.record);
+  }, [run.record]);
+  useEffect(() => { if (run.saveStatus === 'failed') latest.current.onFailed(); }, [run.saveStatus]);
+}
+
+/** Created once per app launch: storage, toy connection (virtual or Bluetooth). */
+function boot() {
+  const { connector, simulator } = createToySetup();
+  const services = createJimmyServices({ storage: AsyncStorage, connector });
+  return { simulator, services, DevToyPanel: loadDevToyPanel() };
 }
 
 export function App() {
-  return <SafeAreaProvider><JimmyApp /></SafeAreaProvider>;
+  const [{ simulator, services, DevToyPanel }] = useState(boot);
+  return <SafeAreaProvider>
+    <JimmyServicesProvider services={services}>
+      <JimmyApp virtualToy={simulator?.toy ?? null} />
+      {simulator && DevToyPanel && <DevToyPanel simulator={simulator} />}
+    </JimmyServicesProvider>
+  </SafeAreaProvider>;
 }
 
-function JimmyApp() {
+function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const state = useJimmy();
   const theme = getTheme(state.dark);
   const [fontsLoaded, fontError] = useFonts({ Baloo: Baloo2_700Bold, Poppins: Poppins_400Regular,
@@ -41,58 +74,65 @@ function JimmyApp() {
   const [screen, setScreen] = useState<Screen>('home');
   const [introDone, setIntroDone] = useState(false);
   const finishIntro = useCallback(() => setIntroDone(true), []);
-  const [challenge] = useState(() => createTimedChallenge());
-  const [timedSaving, setTimedSaving] = useState(false);
-  const [timedSaved, setTimedSaved] = useState(false);
-  const timedSavingRef = useRef(false);
-  const savedTimedId = useRef<string | null>(null);
-  const timedSubmit = useRef<(result: TimedResult) => void>(() => undefined);
+  const timed = useGameRun<TimedPracticeState>();
+  const tapQuest = useGameRun<TapQuestState, TapQuestAction>();
+  const drawingRuns = {
+    drawing: useGameRun<DrawingGameState, DrawingGameAction>(),
+    shapes: useGameRun<DrawingGameState, DrawingGameAction>(),
+  };
   const [activity, setActivity] = useState<Activity>('drawing');
-  const [drafts, setDrafts] = useState<Record<Activity, Draft>>(() => ({ drawing: newDraft(), shapes: newDraft() }));
-  const [saving, setSaving] = useState(false);
-  const savingRef = useRef(false);
+  const [drafts, setDrafts] = useState<Record<Activity, readonly Stroke[]>>({ drawing: NO_STROKES, shapes: NO_STROKES });
   const [reward, setReward] = useState<number | null>(null);
-  const [rewardFrom, setRewardFrom] = useState<'draw' | 'timed'>('draw');
+  const [rewardNewBest, setRewardNewBest] = useState(false);
+  const [rewardFrom, setRewardFrom] = useState<'draw' | 'timed' | 'tapQuest'>('draw');
   const scroll = useRef<ScrollView>(null);
   const { width } = useWindowDimensions();
   const compact = width < 680;
   useEffect(() => setupWebAccessibility(state.dark), [state.dark]);
-  useEffect(() => challenge.onComplete(result => timedSubmit.current(result)), [challenge]);
-  useEffect(() => () => challenge.dispose(), [challenge]);
 
-  timedSubmit.current = result => {
-    if (timedSavingRef.current || savedTimedId.current === result.id) return;
-    timedSavingRef.current = true;
-    setTimedSaving(true);
-    state.finishTimed(result).then(points => {
-      savedTimedId.current = result.id;
-      setTimedSaved(true);
-      setRewardFrom('timed');
-      setReward(points);
-    }).catch(() => state.setError('Your little moves are still here. Please use Retry saving to save your points.'))
-      .finally(() => { timedSavingRef.current = false; setTimedSaving(false); });
-  };
+  const drawingSaveFailed = () => state.setError('Your drawing is still here. We couldn’t save your points yet — please try All done again.');
+  useRunOutcome(timed, record => { setRewardFrom('timed'); setRewardNewBest(record.newBest); setReward(record.score); },
+    () => state.setError('Your little moves are still here. Please use Retry saving to save your points.'));
+  useRunOutcome(tapQuest, record => { setRewardFrom('tapQuest'); setRewardNewBest(record.newBest); setReward(record.score); },
+    () => state.setError('Your taps are still here. Please use Retry saving to save your points.'));
+  // A saved drawing shows its points, then that activity starts on a fresh canvas.
+  useRunOutcome(drawingRuns.drawing, record => {
+    setRewardFrom('draw'); setRewardNewBest(false); setReward(record.score);
+    setDrafts(current => ({ ...current, drawing: NO_STROKES })); drawingRuns.drawing.clear();
+  }, drawingSaveFailed);
+  useRunOutcome(drawingRuns.shapes, record => {
+    setRewardFrom('draw'); setRewardNewBest(false); setReward(record.score);
+    setDrafts(current => ({ ...current, shapes: NO_STROKES })); drawingRuns.shapes.clear();
+  }, drawingSaveFailed);
 
   const navigate = (next: Screen) => { setScreen(next); scroll.current?.scrollTo({ y: 0, animated: false }); };
   const start = (next: Activity) => { setActivity(next); navigate('draw'); };
-  const dispatch = (action: DrawingAction) => setDrafts(current => ({ ...current,
-    [activity]: { ...current[activity], startedAtMs: current[activity].startedAtMs ?? Date.now(),
-      strokes: drawingReducer(current[activity].strokes, action) },
-  }));
+  const dispatch = (action: DrawingAction) => {
+    const run = drawingRuns[activity];
+    // The game's clock starts with the first mark, as the drawing's time always has.
+    if (action.type === 'begin' && run.status !== 'running') run.start(DRAWING_GAMES[activity], { tickMs: DRAWING_TICK_MS });
+    setDrafts(current => ({ ...current, [activity]: drawingReducer(current[activity], action) }));
+  };
 
   const finish = () => {
-    if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
-    const draft = drafts[activity];
-    const startedAtMs = draft.startedAtMs ?? Date.now();
-    state.finish({ id: draft.id, startedAtMs, durationMs: Date.now() - startedAtMs,
-      strokes: draft.strokes.length, activity }).then(() => {
-      setRewardFrom('draw');
-      setReward(draft.strokes.length > 0 ? 50 : 10);
-      setDrafts(current => ({ ...current, [activity]: newDraft() }));
-    }).catch(() => state.setError('Your drawing is still here. We couldn’t save your points yet — please try All done again.'))
-      .finally(() => { setSaving(false); savingRef.current = false; });
+    const current = drawingRuns[activity];
+    if (current.saveStatus === 'saving') return;
+    if (current.status === 'finished' && current.saveStatus === 'failed') { current.retrySave(); return; }
+    const run = current.status === 'running' && current.run ? current.run
+      : current.start(DRAWING_GAMES[activity], { tickMs: DRAWING_TICK_MS });
+    run.submit({ type: 'finish', strokeCount: drafts[activity].length });
+  };
+
+  // Tap Quest adapts its level from this child's recent Tap Quest games.
+  const startTapQuest = (mode: TapQuestMode) => tapQuest.start(tapQuestGame(mode, state.records), { tickMs: 100 });
+
+  const startTimed = (durationMs: number) => {
+    try {
+      timed.start(timedPracticeGame(durationMs), { tickMs: 200 });
+    } catch (error) {
+      if (error instanceof ToyNotConnectedError) state.setError('Find Jimmy first, then start your practice.');
+      else throw error;
+    }
   };
 
   if (!introDone) return <IntroScreen ready={(fontsLoaded || Boolean(fontError)) && state.ready} onDone={finishIntro} />;
@@ -122,7 +162,7 @@ function JimmyApp() {
               backgroundColor: theme.softMint, paddingVertical: 13, paddingHorizontal: 17, borderRadius: 14, minHeight: 56 }}>
             <Icon name="bluetooth" color={theme.dark ? theme.mint : '#087C71'} size={18} />
             <Body theme={theme} small>{state.connection === 'connected' ? 'Jimmy connected' : state.connection === 'searching'
-              ? 'Finding Jimmy…' : 'Find your Jimmy'}</Body>
+              ? 'Finding Jimmy…' : state.connection === 'confirming' ? 'Say yes on Jimmy ▶' : 'Find your Jimmy'}</Body>
           </Pressable>}
           <Button theme={theme} icon="settings" color={theme.yellow} accessibilityLabel="Open settings"
             onPress={() => navigate('settings')} selected={screen === 'settings'} compact />
@@ -139,15 +179,16 @@ function JimmyApp() {
           <Button theme={theme} icon="close" accessibilityLabel="Dismiss message" onPress={() => state.setError(null)} compact />
         </View>}
         {screen === 'home' && <HomeScreen theme={theme} start={start} rewards={() => navigate('rewards')}
-          timed={() => navigate('timed')} />}
-        {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity].strokes}
-          dispatch={dispatch} finish={finish} saving={saving} />}
+          timed={() => navigate('timed')} tapQuest={() => navigate('tapQuest')} />}
+        {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
+          dispatch={dispatch} finish={finish} saving={drawingRuns[activity].saveStatus === 'saving'} />}
         {screen === 'rewards' && <RewardsScreen theme={theme} progress={state.progress} />}
         {screen === 'settings' && <SettingsScreen theme={theme} state={state}
           replayIntro={() => { navigate('home'); setIntroDone(false); }} />}
-        {screen === 'timed' && <TimedScreen theme={theme} challenge={challenge} saving={timedSaving} saved={timedSaved}
-          onStart={durationMs => { setTimedSaved(false); challenge.start(durationMs); }}
-          onRetry={() => { const result = challenge.getResult(); if (result) timedSubmit.current(result); }} />}
+        {screen === 'tapQuest' && <TapQuestScreen theme={theme} run={tapQuest} onStart={startTapQuest} toy={state.toy} />}
+        {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
+          connected={state.connection === 'connected'} searching={state.connection === 'searching'}
+          onConnect={state.connect} virtualToy={virtualToy} />}
       </View>
     </ScrollView>
     <View role="navigation" accessibilityLabel="Main navigation" style={{ backgroundColor: theme.page,
@@ -156,9 +197,9 @@ function JimmyApp() {
       <View style={{ flexDirection: 'row', gap: 8, borderWidth: 1.5, borderColor: theme.border,
         padding: 7, borderRadius: 23, backgroundColor: theme.surface, width: compact ? '100%' : 440 }}>
         {nav.map(item => <Button key={item.screen} theme={theme} label={item.label} icon={item.icon}
-          compact vertical={compact} selected={screen === item.screen || (screen === 'timed' && item.screen === 'home')}
+          compact vertical={compact} selected={screen === item.screen || (isActivity(screen) && item.screen === 'home')}
           onPress={() => navigate(item.screen)}
-          color={screen === item.screen || (screen === 'timed' && item.screen === 'home') ? theme.mint : undefined}
+          color={screen === item.screen || (isActivity(screen) && item.screen === 'home') ? theme.mint : undefined}
           style={{ flex: 1, paddingHorizontal: compact ? 8 : 14 }} />)}
       </View>
     </View>
@@ -167,19 +208,22 @@ function JimmyApp() {
         <View accessibilityViewIsModal role="dialog" aria-label="Activity complete" style={{ width: '100%', maxWidth: 480,
           backgroundColor: theme.surface, borderRadius: 32, padding: 32, alignItems: 'center', gap: 20 }}>
           <Jimmy face size={100} color={theme.mint} />
-          <Eyebrow theme={theme}>A little big win</Eyebrow><Heading theme={theme} size={40}>You made it!</Heading>
-          <Body theme={theme}>{rewardFrom === 'timed' ? 'So many wonderful little moves.' : 'What a wonderful little try.'}</Body>
+          <Eyebrow theme={theme}>{rewardNewBest ? 'Your best ever' : 'A little big win'}</Eyebrow>
+          <Heading theme={theme} size={40}>{rewardNewBest ? 'New high score!' : 'You made it!'}</Heading>
+          <Body theme={theme}>{rewardFrom === 'timed' ? 'So many wonderful little moves.'
+            : rewardFrom === 'tapQuest' ? 'Such careful, steady taps.' : 'What a wonderful little try.'}</Body>
           <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
             <Icon name="star" color={theme.dark ? theme.yellow : '#8A6500'} size={34} />
             <Heading theme={theme} size={36}>+{reward ?? 0} points</Heading>
           </View>
           <Button theme={theme} label="See my rewards" icon="star" color={theme.yellow}
             onPress={() => { setReward(null); navigate('rewards'); }} style={{ width: '100%' }} />
-          <Button theme={theme} label={rewardFrom === 'timed' ? 'Keep playing' : 'Keep creating'}
-            icon={rewardFrom === 'timed' ? 'timer' : 'pencil'} onPress={() => { setReward(null);
-              navigate(rewardFrom === 'timed' ? 'timed' : 'draw'); }} style={{ width: '100%' }} />
+          <Button theme={theme} label={rewardFrom === 'draw' ? 'Keep creating' : 'Keep playing'}
+            icon={rewardFrom === 'timed' ? 'timer' : rewardFrom === 'tapQuest' ? 'sparkle' : 'pencil'} onPress={() => { setReward(null);
+              navigate(rewardFrom === 'draw' ? 'draw' : rewardFrom); }} style={{ width: '100%' }} />
         </View>
       </View>
     </Modal>
+    <CelebrationOverlay theme={theme} />
   </SafeAreaView>;
 }

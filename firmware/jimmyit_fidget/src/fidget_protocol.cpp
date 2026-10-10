@@ -15,8 +15,8 @@ uint32_t readU32(const uint8_t* p) {
          (static_cast<uint32_t>(p[3]) << 24);
 }
 
-bool copyText(const uint8_t* data, size_t length, char* out) {
-  if (length > kMaxTextLength) return false;
+bool copyText(const uint8_t* data, size_t length, char* out, size_t maxLength = kMaxTextLength) {
+  if (length > maxLength) return false;
   for (size_t i = 0; i < length; i++) {
     out[i] = (data[i] >= 0x20 && data[i] <= 0x7e) ? static_cast<char>(data[i]) : '?';
   }
@@ -67,6 +67,11 @@ uint8_t parseCommand(const uint8_t* data, size_t length, ParsedCommand& out) {
       if (out.mode != FidgetMode::kStandalone && out.mode != FidgetMode::kApp) return ErrorCode::kBadValue;
       return ErrorCode::kNone;
 
+    case CommandOpcode::kHello:
+      if (n < 4) return ErrorCode::kBadLength;
+      out.appId = readU32(p);
+      return copyText(p + 4, n - 4, out.name, kMaxAppNameLength) ? ErrorCode::kNone : ErrorCode::kBadLength;
+
     case CommandOpcode::kHaptic:
       if (n < 1 || n > kMaxHapticEffects) return ErrorCode::kBadLength;
       for (size_t i = 0; i < n; i++) {
@@ -97,6 +102,14 @@ uint8_t parseCommand(const uint8_t* data, size_t length, ParsedCommand& out) {
 
     case CommandOpcode::kClearDisplay:
       return n == 0 ? ErrorCode::kNone : ErrorCode::kBadLength;
+
+    case CommandOpcode::kScoreEvent:
+      if (n != 9) return ErrorCode::kBadLength;
+      out.kind = p[0];
+      out.score = readU32(p + 1);
+      out.value = readU32(p + 5);
+      return out.kind >= ScoreEventKind::kGameStart && out.kind <= ScoreEventKind::kGameEnd ? ErrorCode::kNone
+                                                                                            : ErrorCode::kBadValue;
 
     case CommandOpcode::kSyncRequest:
       if (n != 4) return ErrorCode::kBadLength;

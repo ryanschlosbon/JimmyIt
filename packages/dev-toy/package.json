@@ -1,0 +1,19 @@
+{
+  "name": "@jimmyit/dev-toy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development only: a simulated toy and an on-screen virtual toy panel to drive it. Never ship in production builds.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/app-kit": "*",
+    "@jimmyit/core": "*",
+    "@jimmyit/fake-fidget": "*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-native": "*"
+  }
+}

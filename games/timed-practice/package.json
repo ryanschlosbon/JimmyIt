@@ -1,0 +1,13 @@
+{
+  "name": "@jimmyit/game-timed-practice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Timed toy practice: every move on the toy earns points until time runs out.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/game-sdk": "*"
+  }
+}

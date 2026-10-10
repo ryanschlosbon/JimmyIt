@@ -8,8 +8,10 @@ struct RawInputs {
   uint16_t spinnerRaw;      // AS5600 12-bit angle, 0 if not fitted
   bool spinnerValid;
   int32_t screwDetents;     // cumulative since boot
-  uint16_t squeezeRaw;      // 12-bit ADC, 0 if not fitted
 };
+
+// True when the toy has left/right menu keys (full toy, or breadboard keys wired).
+bool inputsHaveMenuKeys();
 
 void inputsBegin();
 RawInputs inputsRead();

@@ -5,7 +5,7 @@
 namespace jimmyit {
 
 namespace {
-constexpr uint8_t kSerialFormatVersion = 1;
+constexpr uint8_t kSerialFormatVersion = 2;  // 2: capacity 64 -> 200
 }  // namespace
 
 RecordMessage toRecordMessage(const ScoreEntry& entry) {

@@ -9,11 +9,13 @@
 /packages/core/                @ryanschlosbon
 /packages/fake-fidget/         @ryanschlosbon
 /packages/ble-react-native/    @ryanschlosbon
+/packages/dev-toy/             @ryanschlosbon
 /firmware/                     @ryanschlosbon
 
 # Contract between backend, game authors and frontend.
 # TODO: add the frontend owner's GitHub username next to backend.
 /packages/game-sdk/            @ryanschlosbon
+/packages/app-kit/             @ryanschlosbon
 
 # Games. TODO: add each game author's username on its own line, e.g.
 # /games/spin-race/            @game-author

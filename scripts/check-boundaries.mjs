@@ -13,7 +13,20 @@ const RULES = {
   'packages/protocol': { internal: [], thirdParty: [] },
   'packages/core': { internal: ['@jimmyit/protocol'], thirdParty: [] },
   'packages/fake-fidget': { internal: ['@jimmyit/protocol', '@jimmyit/core'], thirdParty: [] },
-  'packages/ble-react-native': { internal: ['@jimmyit/protocol', '@jimmyit/core'], thirdParty: [] },
+  'packages/ble-react-native': {
+    internal: ['@jimmyit/protocol', '@jimmyit/core'],
+    testInternal: ['@jimmyit/fake-fidget'],
+    thirdParty: [],
+  },
+  'packages/app-kit': {
+    internal: ['@jimmyit/core', '@jimmyit/game-sdk'],
+    testInternal: ['@jimmyit/fake-fidget'],
+    thirdParty: ['react'],
+  },
+  'packages/dev-toy': {
+    internal: ['@jimmyit/app-kit', '@jimmyit/core', '@jimmyit/fake-fidget'],
+    thirdParty: ['react', 'react-native'],
+  },
   'packages/game-sdk': {
     internal: ['@jimmyit/core', '@jimmyit/fake-fidget'],
     thirdParty: [],
@@ -28,7 +41,7 @@ const RULES = {
 };
 
 // Packages that must run unchanged in React Native, Node and tests.
-const PLATFORM_FREE = ['packages/protocol', 'packages/core', 'packages/fake-fidget', 'packages/game-sdk'];
+const PLATFORM_FREE = ['packages/protocol', 'packages/core', 'packages/fake-fidget', 'packages/game-sdk', 'packages/app-kit'];
 const FORBIDDEN_GLOBALS = [
   [/\bBuffer\b/, 'Buffer (Node only; use Uint8Array)'],
   [/\bprocess\./, 'process (Node only)'],
@@ -89,6 +102,7 @@ for (const pkg of packageDirs()) {
   const pkgDir = join(ROOT, pkg);
   const manifest = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
   const declared = new Set(Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }));
+  const declaredForTests = new Set([...declared, ...Object.keys(manifest.devDependencies ?? {})]);
   let srcFiles = [];
   try {
     srcFiles = listFiles(join(pkgDir, 'src'));
@@ -118,7 +132,7 @@ for (const pkg of packageDirs()) {
         const only = rules.onlyFrom?.[spec];
         if (only && !only.includes(rel)) report(file, `"${spec}" may only be imported from ${only.join(', ')}`);
         const base = spec.split('/').slice(0, 2).join('/');
-        if (!declared.has(base)) report(file, `imports "${base}" but ${pkg}/package.json does not list it in dependencies`);
+        if (!(isTest ? declaredForTests : declared).has(base)) report(file, `imports "${base}" but ${pkg}/package.json does not list it in dependencies`);
         continue;
       }
       if (spec.startsWith('node:')) {

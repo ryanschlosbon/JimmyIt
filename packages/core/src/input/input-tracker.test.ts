@@ -10,14 +10,14 @@ const BASE: InputPacket = {
   pressed: 0,
   spinnerTotal: 0,
   screwTotal: 0,
-  squeezeRaw: 200,
+  reserved: 0,
   timeMs: 0,
   batteryPercent: 50,
   flags: 0,
 };
 
 const CLICKER = 1 << SwitchBit.clicker;
-const NAV_UP = 1 << SwitchBit.navUp;
+const NAV_UP = 1 << SwitchBit.navLeft;
 
 function setup() {
   const time = createManualTime(1000);
@@ -48,8 +48,8 @@ describe('input tracker', () => {
   it('recovers taps shorter than one packet from the pressed latch', () => {
     const { next } = setup();
     expect(next({ pressed: NAV_UP })).toEqual([
-      { type: 'switchDown', switchId: 'navUp' },
-      { type: 'switchUp', switchId: 'navUp', heldMs: 0 },
+      { type: 'switchDown', switchId: 'navLeft' },
+      { type: 'switchUp', switchId: 'navLeft', heldMs: 0 },
     ]);
     next({ switches: CLICKER, pressed: CLICKER });
     // Released and pressed again between packets.
@@ -67,20 +67,6 @@ describe('input tracker', () => {
 
     next({ screwTotal: 32766 });
     expect(next({ screwTotal: -32766 })).toEqual([{ type: 'screw', deltaDetents: 4, position: 32770 }]);
-  });
-
-  it('applies squeeze calibration with hysteresis', () => {
-    const { next } = setup();
-    const raw = (level: number) => Math.round(200 + level * 3300);
-    expect(next({ squeezeRaw: raw(0.5), timeMs: 0 })).toEqual([
-      { type: 'squeeze', level: 0.5 },
-      { type: 'squeezeStart', level: 0.5 },
-    ]);
-    expect(next({ squeezeRaw: raw(0.2), timeMs: 1200 })).toEqual([{ type: 'squeeze', level: 0.2 }]);
-    expect(next({ squeezeRaw: 0, timeMs: 1500 })).toEqual([
-      { type: 'squeeze', level: 0 },
-      { type: 'squeezeEnd', heldMs: 1500 },
-    ]);
   });
 
   it('counts lost packets from sequence gaps, ignoring repeats', () => {

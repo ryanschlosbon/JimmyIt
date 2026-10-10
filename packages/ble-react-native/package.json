@@ -18,5 +18,8 @@
     "react-native-ble-plx": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "@jimmyit/fake-fidget": "*"
   }
 }

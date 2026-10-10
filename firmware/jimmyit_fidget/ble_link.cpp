@@ -97,9 +97,9 @@ bool bleTakeDroppedCommand() {
   return dropped;
 }
 
-void bleSetInput(const InputPacket& packet) {
+void bleSetInput(const InputPacket& packet, bool notify) {
   inputChar.write(&packet, sizeof(packet));
-  if (inputChar.notifyEnabled()) inputChar.notify(&packet, sizeof(packet));
+  if (notify && inputChar.notifyEnabled()) inputChar.notify(&packet, sizeof(packet));
 }
 
 bool bleSendMessage(const void* data, uint16_t length) {
@@ -108,3 +108,8 @@ bool bleSendMessage(const void* data, uint16_t length) {
 }
 
 void bleSetInfo(const DeviceInfo& info) { infoChar.write(&info, sizeof(info)); }
+
+void bleDisconnect() {
+  const uint16_t connection = Bluefruit.connHandle();
+  if (connection != BLE_CONN_HANDLE_INVALID) Bluefruit.disconnect(connection);
+}

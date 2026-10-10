@@ -51,7 +51,7 @@ loses timing detail but no movement.
 |      4 | u16  | `pressed`        | Bits that closed at any moment since the previous packet. Catches taps shorter than one packet. |
 |      6 | i32  | `spinnerTotal`   | AS5600 spinner position, cumulative, 4096 counts per turn. Clockwise from the left = positive. |
 |     10 | i16  | `screwTotal`     | Captive-screw encoder, cumulative detents, wraps. Tighten = positive. |
-|     12 | u16  | `squeezeRaw`     | FSR ADC reading, 12-bit (0-4095). Higher = harder squeeze.          |
+|     12 | u16  | `reserved`       | Always 0. (Was the squeeze sensor, removed from the toy.)          |
 |     14 | u16  | `timeMs`         | Low 16 bits of the fidget's millisecond clock. Used for durations. |
 |     16 | u8   | `batteryPercent` | 0-100, or 255 = unknown.                                           |
 |     17 | u8   | `flags`          | `InputFlag` bits (below).                                          |
@@ -61,15 +61,15 @@ loses timing detail but no movement.
 | Bit | Name           | Hardware (D4 wiring)                     | Kind        |
 | --: | -------------- | ---------------------------------------- | ----------- |
 |   0 | `clicker`      | S1 top clicker, MCP23017 GPA0            | momentary   |
-|   1 | `navUp`        | S2, GPA1                                 | momentary   |
-|   2 | `navDown`      | S3, GPA2                                 | momentary   |
+|   1 | `navLeft`      | S2 menu key, GPA1. "No" in prompts       | momentary   |
+|   2 | `navRight`     | S3 menu key, GPA2. "Yes" in prompts      | momentary   |
 |   3 | `rocker`       | S4 rear rocker, GPA3                     | latching    |
 |   4 | `screwHome`    | S5 screw fully in, GPA4                  | limit       |
 |   5 | `screwOut`     | S6 screw fully out, GPA5                 | limit       |
 |   6 | `sliderLow`    | S7 slider bottom end, GPB0               | limit       |
 |   7 | `sliderHigh`   | S8 slider top end, GPB1                  | limit       |
 |   8 | `stylusStowed` | S9 stylus in its bay, GPB2               | limit       |
-|   9 | `flapButtoned` | Shirt-button flap contacts, GPA6         | contact     |
+|   9 | reserved       | Always 0. (Was the shirt-button flap, removed.) |    |
 | 10-15 | reserved     | always 0                                 |             |
 
 ### `FidgetMode`
@@ -89,6 +89,7 @@ child is never left with a frozen screen.
 |   0 | `clockSet`       | The app has sent `setTime` since power-on.      |
 |   1 | `charging`       | USB power present and the cell is charging.     |
 |   2 | `standaloneGame` | A standalone basic game is running right now.   |
+|   3 | `awaitingApproval` | A phone is connected but the child hasn't said yes yet. |
 
 ## `command` (app → fidget)
 
@@ -98,18 +99,23 @@ The first byte is the opcode. Write with response unless noted.
 | -----: | -------------- | ------------------------------------------------------- | ----: |
 |   0x01 | `setTime`      | u32 `unixSeconds`                                        |     5 |
 |   0x02 | `setMode`      | u8 `mode` (`FidgetMode`)                                 |     2 |
+|   0x03 | `hello`        | u32 `appId`, then 0-15 ASCII chars `name` (shown on the toy) | 5-20 |
 |   0x10 | `haptic`       | 1-8 × u8 `effects`, DRV2605L ROM effect IDs 1-123, played in order |  2-9 |
 |   0x20 | `showText`     | u8 `line` (0-3), then 0-18 ASCII chars `text`. Empty clears the line. |  2-20 |
 |   0x21 | `showScore`    | u32 `score`, u32 `best` (0 = none), u8 `stars` (0-3)     |    10 |
 |   0x22 | `showProgress` | u8 `percent` (0-100), then 0-18 ASCII chars `label`      |  2-20 |
 |   0x23 | `clearDisplay` | —                                                        |     1 |
+|   0x24 | `scoreEvent`   | u8 `kind` (`ScoreEventKind`), u32 `score`, u32 `value`   |    10 |
 |   0x30 | `syncRequest`  | u32 `afterRecordId`                                      |     5 |
 |   0x31 | `syncAck`      | u32 `upToRecordId`                                       |     5 |
 |   0x32 | `setBest`      | u8 `modeId`, u32 `score`                                 |     6 |
 
 Display commands only take effect in `app` mode. In `standalone` mode the
 firmware ignores them without an error, because the fidget owns its own screen.
-`haptic` works in both modes.
+`haptic` and `scoreEvent` work in both modes.
+
+Until the child approves the phone (see "Connecting"), every command except
+`hello` gets an `error` with code `notApproved`.
 
 ## `message` (fidget → app)
 
@@ -119,6 +125,8 @@ The first byte is the message type.
 | ---: | ---------- | ---------------------------------------------------------------------------------- | ----: |
 | 0x01 | `record`   | u32 `recordId`, u8 `modeId`, u8 `flags` (`RecordFlag`), u32 `startUnix`, u16 `durationS`, u32 `score`, u16 `actions` | 19 |
 | 0x02 | `syncDone` | u32 `newestRecordId` (0 = log empty), u16 `sentCount`                              |     7 |
+| 0x03 | `scoreEvent` | u8 `kind`, u8 `modeId` (`BasicModeId`), u32 `score`, u32 `value`: a moment in a game the toy is running by itself | 11 |
+| 0x04 | `approval` | u8 `status` (`ApprovalStatus`: 0 declined, 1 accepted, 2 waiting for the child)     |     2 |
 | 0x7F | `error`    | u8 `code` (`ErrorCode`), u8 `opcode` that failed                                    |     3 |
 
 ### `RecordFlag`
@@ -137,6 +145,7 @@ The first byte is the message type.
 |     2 | `badLength`     |
 |     3 | `badValue`      |
 |     4 | `busy`          |
+|     5 | `notApproved`   |
 
 ## `info` (16 bytes, read)
 
@@ -152,10 +161,70 @@ The first byte is the message type.
 |     14 | u16  | `storedRecordCount` |
 
 `Capability`: bit 0 `haptics`, bit 1 `display`, bit 2 `scoreLog`, bit 3
-`standaloneModes`.
+`standaloneModes`, bit 4 `scoreEvents`, bit 5 `approval`.
 
 The app refuses to talk to a fidget whose `protocolVersion` differs from its own,
 and tells the user that the app or firmware needs an update.
+
+## Connecting: the child says yes on the toy
+
+A phone can't use the toy until the child agrees on the toy itself.
+
+1. The app connects, reads `info`, subscribes to `message`, and (if `info`
+   has the `approval` capability) writes `hello(appId, name)`. `appId` is a
+   random number the app picks once per install and keeps; `name` is shown on
+   the toy ("CONNECT TO RYAN'S PIXEL?").
+2. If the toy already approved this `appId`, it replies `approval(accepted)`
+   straight away.
+3. Otherwise it replies `approval(waiting)`, sets the `awaitingApproval` input
+   flag and shows the question. **Left menu key (`navLeft`) = no, right
+   (`navRight`) = yes.** On a breadboard with only the clicker, the clicker
+   means yes. No answer in 30 s counts as no.
+4. Yes → `approval(accepted)`; the toy remembers the `appId` (up to 8 phones,
+   in flash) so it won't ask that phone again. No → `approval(declined)`, then
+   the toy disconnects.
+5. A phone that connects without sending `hello` within 2 s (for example nRF
+   Connect) is asked about as "A PHONE" and is not remembered.
+
+Until accepted, the toy sends no `input` notifications and answers every other
+command with `error(notApproved)`. This is consent, not security: `appId` is
+not secret. Holding both menu keys for 5 s on the toy's ready screen forgets
+every remembered phone.
+
+## Score events
+
+Both the toy and the app celebrate the same moments in a game. Whoever runs
+the game decides when they happen, using these rules:
+
+| Kind (`ScoreEventKind`) | When | `value` |
+| --- | --- | --- |
+| 1 `gameStart` | The game starts | best score before this game (0 = none) |
+| 2 `points`    | The score goes up | points just added |
+| 3 `milestone` | The score reaches each multiple of 100 (`POINTS_PER_MILESTONE`) | the multiple reached, e.g. 200 |
+| 4 `newBest`   | The score first passes the previous best, if there was one | the best that was just beaten |
+| 5 `gameEnd`   | The game ends | best score before this game |
+
+`score` is always the game's total after the event. One score increase can
+produce `points`, then any `milestone`s, then `newBest`, in that order.
+
+- **App game, toy connected:** the app sends `scoreEvent` commands. It may
+  merge `points` events that arrive within 150 ms into one.
+- **Toy game, phone connected:** the toy sends `scoreEvent` messages, so the
+  app can celebrate too. They don't replace the `record` at the end.
+
+What the toy does for each (firmware `animations.cpp`; the haptic names match
+the app's `Feedback`):
+
+| Kind | Toy screen | Haptic |
+| --- | --- | --- |
+| `gameStart` | "GO!" burst (0.7 s) | tap (7) |
+| `points` | "+N" pops up in the corner (0.35 s) | tick (24) |
+| `milestone` | sparkles + "AMAZING JOB! N POINTS" (2 s) | success (10) |
+| `newBest` | flashing "NEW HIGH SCORE!" with expanding rings (2.5 s) | celebrate (12, 14) |
+| `gameEnd` | the result screen | success (10), or celebrate if it was a new best |
+
+A bigger animation is never cut short by a smaller one (`newBest` >
+`milestone` > `gameEnd` > `gameStart` > `points`).
 
 ## Scores in both directions
 
@@ -163,7 +232,7 @@ and tells the user that the app or firmware needs an update.
 
 1. The fidget runs its own basic games (`BasicModeId` below) with no phone
    present and scores them on the device.
-2. Each finished game is stored in a flash-backed ring log, at least 32 entries.
+2. Each finished game is stored in a flash-backed ring log, at least 32 entries (the firmware keeps 200).
    `recordId` starts at 1, increases by 1 per game, and survives power cycles.
    When the log is full the oldest entry is overwritten.
 3. On connect, the app reads `info`, sends `setTime`, then sends
@@ -192,21 +261,20 @@ and tells the user that the app or firmware needs an update.
 
 | Id | Name        | App game id         | Rules (firmware `basic_modes.cpp` is the authority) |
 | -: | ----------- | ------------------- | ---------------------------------------------------- |
-|  1 | `freePlay`  | `fidget-free-play`  | +10 per action: any switch closing, each 1/8 spinner turn, each screw detent, each squeeze. Ends after 20 s with no action, or 3 min. The toy shows a celebration every 100 points. |
-|  2 | `spinCount` | `fidget-spin-count` | 30 s. +10 per full spinner turn, either direction.   |
+|  1 | `freePlay`  | `fidget-free-play`  | The default game. The first move starts it and scores. +10 per move (see below). Ends 20 s after the last move, or at 3 min. The toy celebrates every 100 points. |
+|  2 | `spinCount` | `fidget-spin-count` | Needs the spinner. The first move starts a 30 s clock. +10 per full spinner turn, either direction. |
 
 Ids 1-63 are reserved for firmware basic modes.
 
-## Shared defaults (both sides must match until calibrated per device)
+**One move** means the same on the toy and in the app (firmware `BasicGame::countMoves`,
+app `createToyActionTracker`): a press of the clicker or a menu key, the rocker
+flipping either way, a slider end, taking the stylus out, a 90° spin (measured
+from the last counted position, so sensor jitter never adds up), or one screw
+detent. Screw limit switches and putting the stylus back are positions, not
+moves.
 
-| Name            | Value | Used for                                   |
-| --------------- | ----: | ------------------------------------------ |
-| `squeezeRawMin` |   200 | Raw value read as "not squeezing" (level 0) |
-| `squeezeRawMax` |  3500 | Raw value read as a full squeeze (level 1) |
-| `squeezeOnLevel`  | 0.30 | Level that starts a squeeze               |
-| `squeezeOffLevel` | 0.15 | Level that ends a squeeze (hysteresis)    |
-
-These are placeholders until the FSR is measured in the built toy.
+The toy stores up to 200 finished games in flash until the app syncs them; when
+full, the oldest is overwritten.
 
 ## DRV2605L effects used by the app
 

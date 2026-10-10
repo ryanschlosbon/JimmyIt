@@ -1,1 +1,9 @@
-export { type FakeFidget, type FakeFidgetOptions, type FakeDisplay, type FakeRecordInput, createFakeFidget } from './fake-fidget';
+export {
+  type FakeFidget,
+  type FakeFidgetOptions,
+  type FakeDisplay,
+  type FakeRecordInput,
+  type FakeCelebration,
+  type FakeApprovalRequest,
+  createFakeFidget,
+} from './fake-fidget';

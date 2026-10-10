@@ -25,10 +25,10 @@ struct PinMap {
   uint8_t switchBit;
 };
 constexpr PinMap kSwitchPins[] = {
-    {0, SwitchBit::kClicker},   {1, SwitchBit::kNavUp},      {2, SwitchBit::kNavDown},
-    {3, SwitchBit::kRocker},    {4, SwitchBit::kScrewHome},  {5, SwitchBit::kScrewOut},
-    {6, SwitchBit::kFlapButtoned}, {8, SwitchBit::kSliderLow}, {9, SwitchBit::kSliderHigh},
-    {10, SwitchBit::kStylusStowed},
+    {0, SwitchBit::kClicker},   {1, SwitchBit::kNavLeft},   {2, SwitchBit::kNavRight},
+    {3, SwitchBit::kRocker},    {4, SwitchBit::kScrewHome}, {5, SwitchBit::kScrewOut},
+    {8, SwitchBit::kSliderLow}, {9, SwitchBit::kSliderHigh}, {10, SwitchBit::kStylusStowed},
+    // GPA6 was the shirt-button flap; it is no longer fitted.
 };
 #endif
 
@@ -48,6 +48,10 @@ void inputsBegin() {
 #if JIMMYIT_HAS_BREADBOARD_BUTTON
   pinMode(JIMMYIT_BREADBOARD_BUTTON_PIN, INPUT_PULLUP);  // button pulls the pin to GND when pressed
 #endif
+#if JIMMYIT_HAS_BREADBOARD_MENU_KEYS
+  pinMode(JIMMYIT_BREADBOARD_NAV_LEFT_PIN, INPUT_PULLUP);
+  pinMode(JIMMYIT_BREADBOARD_NAV_RIGHT_PIN, INPUT_PULLUP);
+#endif
 #if JIMMYIT_HAS_MCP23017
   mcpOk = mcp.begin_I2C(0x20, &Wire);
   if (mcpOk) {
@@ -63,9 +67,6 @@ void inputsBegin() {
   attachInterrupt(digitalPinToInterrupt(D6), onEncoderEdge, CHANGE);
   attachInterrupt(digitalPinToInterrupt(D7), onEncoderEdge, CHANGE);
 #endif
-#if JIMMYIT_HAS_FSR
-  analogReadResolution(12);
-#endif
 }
 
 RawInputs inputsRead() {
@@ -73,6 +74,10 @@ RawInputs inputsRead() {
 
 #if JIMMYIT_HAS_BREADBOARD_BUTTON
   if (digitalRead(JIMMYIT_BREADBOARD_BUTTON_PIN) == LOW) in.closedSwitches |= 1u << SwitchBit::kClicker;
+#endif
+#if JIMMYIT_HAS_BREADBOARD_MENU_KEYS
+  if (digitalRead(JIMMYIT_BREADBOARD_NAV_LEFT_PIN) == LOW) in.closedSwitches |= 1u << SwitchBit::kNavLeft;
+  if (digitalRead(JIMMYIT_BREADBOARD_NAV_RIGHT_PIN) == LOW) in.closedSwitches |= 1u << SwitchBit::kNavRight;
 #endif
 
 #if JIMMYIT_HAS_MCP23017
@@ -101,9 +106,7 @@ RawInputs inputsRead() {
   in.screwDetents = JIMMYIT_SCREW_INVERT ? -encoder.detents() : encoder.detents();
 #endif
 
-#if JIMMYIT_HAS_FSR
-  in.squeezeRaw = static_cast<uint16_t>(analogRead(A1));
-#endif
-
   return in;
 }
+
+bool inputsHaveMenuKeys() { return JIMMYIT_HAS_MCP23017 || JIMMYIT_HAS_BREADBOARD_MENU_KEYS; }

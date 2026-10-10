@@ -9,6 +9,7 @@ export const APP_ARTWORK: Readonly<{
   drawingCard: ImageSourcePropType | null;
   shapesCard: ImageSourcePropType | null;
   timedCard: ImageSourcePropType | null;
+  tapQuestCard: ImageSourcePropType | null;
   rewardsCard: ImageSourcePropType | null;
 }> = {
   introStart: require('../assets/intro-start.png'),
@@ -18,6 +19,7 @@ export const APP_ARTWORK: Readonly<{
   drawingCard: null,
   shapesCard: null,
   timedCard: null,
+  tapQuestCard: null,
   rewardsCard: null,
 };
 

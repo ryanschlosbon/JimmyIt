@@ -10,7 +10,7 @@ export interface ScoreCounter {
   readonly actions: number;
   /** Adds a non-negative integer number of points. */
   add(points: number): void;
-  /** Counts interactions (presses, turns, squeezes) for the `actions` stat. */
+  /** Counts interactions (presses, spins, screw turns) for the `actions` stat. */
   countAction(count?: number): void;
   setMetric(name: string, value: number): void;
   /** Keeps the larger of the current and new value, e.g. longest hold. */

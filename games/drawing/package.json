@@ -1,0 +1,13 @@
+{
+  "name": "@jimmyit/game-drawing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Screen drawing games (free drawing, shape challenge) and the stroke model their views use.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/game-sdk": "*"
+  }
+}

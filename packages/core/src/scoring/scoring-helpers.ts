@@ -21,7 +21,7 @@ export function proximityPoints(options: { value: number; target: number; tolera
   return Math.max(0, Math.round(maxPoints * closeness));
 }
 
-/** Whole points for time spent doing something, e.g. holding a squeeze. */
+/** Whole points for time spent doing something, e.g. holding the slider at one end. */
 export function pointsForDuration(durationMs: number, pointsPerSecond: number): number {
   return Math.max(0, Math.floor((durationMs / 1000) * pointsPerSecond));
 }

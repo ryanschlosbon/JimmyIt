@@ -4,12 +4,12 @@ import { Body, Button, Eyebrow, Heading } from '../components/Controls';
 import { Icon, type IconName } from '../components/Icon';
 import { Jimmy } from '../components/Jimmy';
 import type { Theme } from '../theme';
-import type { Activity } from '../progress';
+import type { Activity } from '../games';
 import { APP_ARTWORK } from '../artwork';
 
-export function HomeScreen({ theme, start, rewards, timed }: {
+export function HomeScreen({ theme, start, rewards, timed, tapQuest }: {
   readonly theme: Theme; readonly start: (activity: Activity) => void; readonly rewards: () => void;
-  readonly timed: () => void;
+  readonly timed: () => void; readonly tapQuest: () => void;
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 680;
@@ -23,9 +23,12 @@ export function HomeScreen({ theme, start, rewards, timed }: {
     { title: 'Shape challenge', caption: 'A little practice, a little magic.', eyebrow: 'PLAY & PRACTICE',
       icon: 'shapes', color: theme.mint, background: theme.softMint, artwork: APP_ARTWORK.shapesCard,
       onPress: () => start('shapes') },
-    { title: 'Timed toy practice', caption: 'Press, spin, squeeze. Your pace.', eyebrow: 'MOVE & DISCOVER',
+    { title: 'Timed toy practice', caption: 'Press, spin, twist. Your pace.', eyebrow: 'MOVE & DISCOVER',
       icon: 'timer', color: theme.yellow, background: theme.dark ? theme.raised : '#FFF8D9',
       artwork: APP_ARTWORK.timedCard, onPress: timed },
+    { title: 'Tap Quest', caption: 'Steady taps, paths and patterns.', eyebrow: 'STYLUS & FOCUS',
+      icon: 'sparkle', color: theme.teal, background: theme.dark ? theme.raised : '#E3F6F3',
+      artwork: APP_ARTWORK.tapQuestCard, onPress: tapQuest },
     { title: 'My rewards', caption: 'Look how much you’ve grown!', eyebrow: 'COLLECT & CELEBRATE',
       icon: 'star', color: theme.purple, background: theme.softPurple, artwork: APP_ARTWORK.rewardsCard, onPress: rewards },
   ];
