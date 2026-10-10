@@ -1,0 +1,28 @@
+# Who must review changes to each area. See AGENTS.md "Repository map and ownership".
+# Later lines win. Turn on "Require review from Code Owners" in the main branch
+# protection rule for this to be enforced.
+
+*                              @ryanschlosbon
+
+# Backend (BLE, input, scoring, storage, sync, firmware)
+/packages/protocol/            @ryanschlosbon
+/packages/core/                @ryanschlosbon
+/packages/fake-fidget/         @ryanschlosbon
+/packages/ble-react-native/    @ryanschlosbon
+/firmware/                     @ryanschlosbon
+
+# Contract between backend, game authors and frontend.
+# TODO: add the frontend owner's GitHub username next to backend.
+/packages/game-sdk/            @ryanschlosbon
+
+# Games. TODO: add each game author's username on its own line, e.g.
+# /games/spin-race/            @game-author
+/games/                        @ryanschlosbon
+
+# Frontend app. TODO: replace with the frontend owner's GitHub username.
+/apps/                         @ryanschlosbon
+
+# Shared rules
+/AGENTS.md                     @ryanschlosbon
+/games/AGENTS.md               @ryanschlosbon
+/scripts/                      @ryanschlosbon

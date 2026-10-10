@@ -1,0 +1,26 @@
+{
+  "name": "jimmyit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fine-motor fidget toy: firmware, shared TypeScript packages, minigames and the Android app.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "games/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:firmware": "make -C firmware/test",
+    "typecheck": "tsc -p tsconfig.json",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check": "npm run typecheck && npm run check:boundaries && npm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

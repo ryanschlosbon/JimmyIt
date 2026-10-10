@@ -1,0 +1,177 @@
+{
+  "$comment": "Golden byte vectors for protocol v1. Hex is little-endian wire bytes. Generated independently with Python struct; TypeScript tests and firmware host tests (via scripts/gen-firmware-vectors.mjs) both check against this file. Edit only together with PROTOCOL.md.",
+  "protocolVersion": 1,
+  "input": [
+    {
+      "name": "idle standalone",
+      "hex": "01 01 00 00 00 00 00 00 00 00 00 00 00 00 e8 03 57 01",
+      "fields": {
+        "seq": 1,
+        "mode": 1,
+        "switches": 0,
+        "pressed": 0,
+        "spinnerTotal": 0,
+        "screwTotal": 0,
+        "squeezeRaw": 0,
+        "timeMs": 1000,
+        "batteryPercent": 87,
+        "flags": 1
+      }
+    },
+    {
+      "name": "busy app mode, negative counters, wrapped time",
+      "hex": "ff 02 01 02 01 00 78 ec ff ff fd ff 00 08 ff ff ff 06",
+      "fields": {
+        "seq": 255,
+        "mode": 2,
+        "switches": 513,
+        "pressed": 1,
+        "spinnerTotal": -5000,
+        "screwTotal": -3,
+        "squeezeRaw": 2048,
+        "timeMs": 65535,
+        "batteryPercent": 255,
+        "flags": 6
+      }
+    }
+  ],
+  "info": [
+    {
+      "name": "typical",
+      "hex": "01 00 01 00 ef be ad de 0f 00 2a 00 00 00 20 00",
+      "fields": {
+        "protocolVersion": 1,
+        "firmwareMajor": 0,
+        "firmwareMinor": 1,
+        "firmwarePatch": 0,
+        "deviceId": 3735928559,
+        "capabilities": 15,
+        "newestRecordId": 42,
+        "storedRecordCount": 32
+      }
+    }
+  ],
+  "message": [
+    {
+      "name": "record",
+      "hex": "01 2a 00 00 00 02 03 00 78 e7 68 1e 00 78 00 00 00 0c 00",
+      "fields": {
+        "type": "record",
+        "recordId": 42,
+        "modeId": 2,
+        "flags": 3,
+        "startUnix": 1760000000,
+        "durationS": 30,
+        "score": 120,
+        "actions": 12
+      }
+    },
+    {
+      "name": "syncDone",
+      "hex": "02 2a 00 00 00 03 00",
+      "fields": {
+        "type": "syncDone",
+        "newestRecordId": 42,
+        "sentCount": 3
+      }
+    },
+    {
+      "name": "error",
+      "hex": "7f 01 99",
+      "fields": {
+        "type": "error",
+        "code": 1,
+        "opcode": 153
+      }
+    }
+  ],
+  "command": [
+    {
+      "name": "setTime",
+      "hex": "01 00 78 e7 68",
+      "fields": {
+        "type": "setTime",
+        "unixSeconds": 1760000000
+      }
+    },
+    {
+      "name": "setMode",
+      "hex": "02 02",
+      "fields": {
+        "type": "setMode",
+        "mode": 2
+      }
+    },
+    {
+      "name": "haptic",
+      "hex": "10 01 0a",
+      "fields": {
+        "type": "haptic",
+        "effects": [
+          1,
+          10
+        ]
+      }
+    },
+    {
+      "name": "showText",
+      "hex": "20 01 53 63 6f 72 65 20 31 32 30",
+      "fields": {
+        "type": "showText",
+        "line": 1,
+        "text": "Score 120"
+      }
+    },
+    {
+      "name": "showScore",
+      "hex": "21 78 00 00 00 96 00 00 00 02",
+      "fields": {
+        "type": "showScore",
+        "score": 120,
+        "best": 150,
+        "stars": 2
+      }
+    },
+    {
+      "name": "showProgress",
+      "hex": "22 4b 48 6f 6c 64 20 69 74 21",
+      "fields": {
+        "type": "showProgress",
+        "percent": 75,
+        "label": "Hold it!"
+      }
+    },
+    {
+      "name": "clearDisplay",
+      "hex": "23",
+      "fields": {
+        "type": "clearDisplay"
+      }
+    },
+    {
+      "name": "syncRequest",
+      "hex": "30 28 00 00 00",
+      "fields": {
+        "type": "syncRequest",
+        "afterRecordId": 40
+      }
+    },
+    {
+      "name": "syncAck",
+      "hex": "31 2a 00 00 00",
+      "fields": {
+        "type": "syncAck",
+        "upToRecordId": 42
+      }
+    },
+    {
+      "name": "setBest",
+      "hex": "32 02 96 00 00 00",
+      "fields": {
+        "type": "setBest",
+        "modeId": 2,
+        "score": 150
+      }
+    }
+  ]
+}

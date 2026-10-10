@@ -1,0 +1,13 @@
+{
+  "name": "@jimmyit/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fidget input handling, scoring, score storage and fidget sync. Platform-free TypeScript.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/protocol": "*"
+  }
+}

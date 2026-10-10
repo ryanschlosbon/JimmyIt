@@ -1,0 +1,14 @@
+{
+  "name": "@jimmyit/fake-fidget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simulated fidget that speaks the real protocol. For frontend dev, game dev and tests.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/core": "*",
+    "@jimmyit/protocol": "*"
+  }
+}

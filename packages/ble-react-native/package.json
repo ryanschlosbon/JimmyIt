@@ -1,0 +1,22 @@
+{
+  "name": "@jimmyit/ble-react-native",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FidgetTransport over react-native-ble-plx. The only package that touches the phone's Bluetooth stack.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/core": "*",
+    "@jimmyit/protocol": "*"
+  },
+  "peerDependencies": {
+    "react-native-ble-plx": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-ble-plx": {
+      "optional": true
+    }
+  }
+}

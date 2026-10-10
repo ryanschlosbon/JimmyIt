@@ -1,0 +1,61 @@
+// Test kit for game authors: import from "@jimmyit/game-sdk/testing" in
+// *.test.ts files only. Never import this from game logic or app code.
+import {
+  connectFidgetClient,
+  createManualTime,
+  createMemoryKeyValueStore,
+  createScoreRepository,
+  type FidgetClient,
+  type ScoreRecord,
+  type ScoreRepository,
+} from '@jimmyit/core';
+import { createFakeFidget, type FakeFidget } from '@jimmyit/fake-fidget';
+import { type GameRun, startGame } from './game-runner';
+import type { GameDefinition } from './game-types';
+
+export interface GameTestHarness<TState> {
+  readonly run: GameRun<TState>;
+  /** Drive the toy: press, tap, spin, turnScrew, squeeze… and inspect display/haptics. */
+  readonly fidget: FakeFidget;
+  readonly client: FidgetClient;
+  readonly repository: ScoreRepository;
+  /** Moves the game clock forward, running ticks in order. */
+  advance(ms: number): void;
+  /** Advances until the game ends (at most `maxMs`) and returns the saved record. */
+  playToEnd(maxMs?: number): Promise<ScoreRecord>;
+}
+
+/** 2026-01-01T00:00:00Z, so saved records have realistic timestamps. */
+const HARNESS_START_MS = Date.UTC(2026, 0, 1);
+
+export async function createGameTestHarness<TState>(
+  game: GameDefinition<TState>,
+  options: { tickMs?: number } = {},
+): Promise<GameTestHarness<TState>> {
+  const time = createManualTime(HARNESS_START_MS);
+  const fidget = createFakeFidget({ clock: time.clock });
+  const client = await connectFidgetClient(fidget.transport, { clock: time.clock, scheduler: time.scheduler });
+  const repository = createScoreRepository(createMemoryKeyValueStore());
+  const run = startGame(game, {
+    device: client,
+    repository,
+    clock: time.clock,
+    scheduler: time.scheduler,
+    ...(options.tickMs === undefined ? {} : { tickMs: options.tickMs }),
+    onDeviceError: (error) => {
+      throw error;
+    },
+  });
+  return {
+    run,
+    fidget,
+    client,
+    repository,
+    advance: (ms) => time.advance(ms),
+    async playToEnd(maxMs = game.durationMs ?? 10 * 60_000) {
+      time.advance(maxMs);
+      if (run.status === 'running') throw new Error(`${game.id} was still running after ${maxMs} ms`);
+      return run.result;
+    },
+  };
+}
