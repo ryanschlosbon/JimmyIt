@@ -4,6 +4,7 @@
 
 #include "basic_modes.h"
 #include "fidget_protocol.h"
+#include "input_helpers.h"
 #include "score_log.h"
 
 static int failures = 0;
@@ -26,6 +27,58 @@ static void testUuid() {
   // 59e50002-3be2-4d9c-9607-646ddb5d9770, LSB first.
   const uint8_t expected[16] = {0x70, 0x97, 0x5d, 0xdb, 0x6d, 0x64, 0x07, 0x96, 0x9c, 0x4d, 0xe2, 0x3b, 0x02, 0x00, 0xe5, 0x59};
   CHECK(memcmp(uuid, expected, 16) == 0);
+  CHECK(memcmp(kUuid128Input, expected, 16) == 0);
+  const uint8_t* arrays[] = {kUuid128Service, kUuid128Input, kUuid128Command, kUuid128Message, kUuid128Info};
+  const uint16_t ids[] = {kUuidService, kUuidInput, kUuidCommand, kUuidMessage, kUuidInfo};
+  for (int i = 0; i < 5; i++) {
+    makeUuid128(ids[i], uuid);
+    CHECK(memcmp(uuid, arrays[i], 16) == 0);
+  }
+}
+
+static void testDebouncer() {
+  SwitchDebouncer d(50);
+  CHECK(d.update(0x0000, 0) == 0);        // baseline
+  CHECK(d.update(0x0001, 10) == 0);       // closed, settling
+  CHECK(d.update(0x0000, 20) == 0);       // bounce open
+  CHECK(d.update(0x0001, 30) == 0);       // closed again: timer restarts at 30
+  CHECK(d.update(0x0001, 79) == 0);
+  CHECK(d.update(0x0001, 80) == 0x0001);  // stable for 50 ms: one press
+  CHECK(d.update(0x0001, 500) == 0);      // held: no repeat
+  CHECK(d.update(0x0000, 510) == 0);
+  CHECK(d.update(0x0000, 560) == 0);      // release is reported via stable(), not as a press
+  CHECK(d.stable() == 0);
+  CHECK(d.update(0x0300, 600) == 0);
+  CHECK(d.update(0x0300, 650) == 0x0300); // two switches at once
+  SwitchDebouncer heldAtBoot(50);
+  CHECK(heldAtBoot.update(0x0004, 0) == 0 && heldAtBoot.stable() == 0x0004);
+}
+
+static void testSpinnerTracker() {
+  SpinnerTracker s;
+  CHECK(s.update(4000) == 0);   // baseline
+  CHECK(s.update(100) == 196);  // forward across the 4095 -> 0 wrap
+  CHECK(s.update(4090) == 90);  // backward 106 across the wrap
+  CHECK(s.update(2042) == -1958); // exactly half a turn counts as backward
+}
+
+static void testQuadrature() {
+  QuadratureDecoder q;
+  q.begin(true, true);
+  // 11 -> 10 -> 00 -> 01 -> 11 is one detent in the negative direction.
+  const bool cycle[4][2] = {{true, false}, {false, false}, {false, true}, {true, true}};
+  for (int turn = 0; turn < 3; turn++) {
+    for (const auto& s : cycle) q.onEdge(s[0], s[1]);
+  }
+  CHECK(q.quarterSteps() == -12 && q.detents() == -3);
+  q.onEdge(false, true);  // reverse one quarter
+  q.onEdge(false, false); // reverse two quarters: halfway between detents
+  CHECK(q.quarterSteps() == -10 && q.detents() == -3);
+  q.onEdge(true, false);
+  q.onEdge(true, true);   // rest position one detent back
+  CHECK(q.quarterSteps() == -8 && q.detents() == -2);
+  q.onEdge(false, false); // invalid double jump: ignored
+  CHECK(q.quarterSteps() == -8);
 }
 
 static void testCommandErrors() {
@@ -131,7 +184,7 @@ static void testFreePlay() {
   p.spinnerTotal = kSpinnerCountsPerTurn / 4;                         // 2 eighths
   p.squeezeRaw = kSqueezeRawOn;                                       // 1
   game.update(p, 1000);
-  CHECK(game.score() == 8);
+  CHECK(game.score() == 80);
   p.pressed = 0;
   game.update(p, 20999);
   CHECK(game.isRunning());
@@ -150,6 +203,9 @@ static void testFreePlay() {
 int main() {
   runVectorTests();
   testUuid();
+  testDebouncer();
+  testSpinnerTracker();
+  testQuadrature();
   testCommandErrors();
   testScoreLog();
   testSpinCount();

@@ -18,7 +18,7 @@ export const BASIC_MODES: readonly BasicModeInfo[] = [
     name: 'freePlay',
     gameId: 'fidget-free-play',
     title: 'Free Play',
-    starThresholds: [20, 60, 120],
+    starThresholds: [200, 600, 1200],
   },
   {
     modeId: BasicModeId.spinCount,

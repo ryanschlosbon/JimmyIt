@@ -26,6 +26,14 @@ bool copyText(const uint8_t* data, size_t length, char* out) {
 
 }  // namespace
 
+#define JIMMYIT_UUID(lo, hi) {0x70, 0x97, 0x5d, 0xdb, 0x6d, 0x64, 0x07, 0x96, 0x9c, 0x4d, 0xe2, 0x3b, lo, hi, 0xe5, 0x59}
+const uint8_t kUuid128Service[16] = JIMMYIT_UUID(0x01, 0x00);
+const uint8_t kUuid128Input[16] = JIMMYIT_UUID(0x02, 0x00);
+const uint8_t kUuid128Command[16] = JIMMYIT_UUID(0x03, 0x00);
+const uint8_t kUuid128Message[16] = JIMMYIT_UUID(0x04, 0x00);
+const uint8_t kUuid128Info[16] = JIMMYIT_UUID(0x05, 0x00);
+#undef JIMMYIT_UUID
+
 void makeUuid128(uint16_t shortId, uint8_t out[16]) {
   memcpy(out, kUuidBaseLsbFirst, 16);
   out[12] = static_cast<uint8_t>(shortId & 0xff);

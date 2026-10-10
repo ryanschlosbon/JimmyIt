@@ -31,6 +31,14 @@ constexpr uint16_t kUuidInfo = 0x0005;
 // Fills `out` with the 128-bit UUID in the LSB-first byte order Bluefruit's
 // BLEUuid(const uint8_t[16]) expects.
 void makeUuid128(uint16_t shortId, uint8_t out[16]);
+// The same UUIDs as static arrays. Bluefruit's BLEUuid keeps a pointer to the
+// bytes, so they must live for the whole program; these are constant-initialized
+// and safe to use in global constructors.
+extern const uint8_t kUuid128Service[16];
+extern const uint8_t kUuid128Input[16];
+extern const uint8_t kUuid128Command[16];
+extern const uint8_t kUuid128Message[16];
+extern const uint8_t kUuid128Info[16];
 
 // Bit indexes in InputPacket::switches / ::pressed.
 namespace SwitchBit {
@@ -99,6 +107,7 @@ constexpr uint8_t kBusy = 4;
 }  // namespace ErrorCode
 
 namespace BasicModeId {
+constexpr uint8_t kNone = 0;
 constexpr uint8_t kFreePlay = 1;
 constexpr uint8_t kSpinCount = 2;
 }  // namespace BasicModeId
