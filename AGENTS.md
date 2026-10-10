@@ -26,7 +26,7 @@ Arduino nRF52 core.
 | `packages/game-sdk/`         | **Contract**: what a game can see and do, plus the game runner  | Backend, reviewed by game authors and frontend |
 | `packages/app-kit/`          | **Contract**: the app's logic without UI (connection, sync, running games, rewards, scoreboard) and React hooks | Backend, reviewed by frontend |
 | `packages/dev-toy/`          | Development only: virtual toy + on-screen panel to drive it     | Backend          |
-| `games/<game-id>/`           | One minigame per folder (`drawing`, `timed-practice`) | That game's author |
+| `games/<game-id>/`           | One minigame per folder (`drawing`, `timed-practice`, `tap-quest`, `shape-recognition`) | That game's author |
 | `apps/mobile/`               | The Android app: screens, navigation, game views, design        | Frontend         |
 | `firmware/`                  | XIAO nRF52840 firmware and its host tests                       | Backend          |
 

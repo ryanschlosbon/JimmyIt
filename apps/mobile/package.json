@@ -19,6 +19,8 @@
     "@jimmyit/core": "*",
     "@jimmyit/game-drawing": "*",
     "@jimmyit/game-sdk": "*",
+    "@jimmyit/game-shape-recognition": "*",
+    "@jimmyit/game-tap-quest": "*",
     "@jimmyit/game-timed-practice": "*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.27",

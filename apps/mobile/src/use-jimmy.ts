@@ -84,6 +84,9 @@ export function useJimmy() {
     disconnect: () => { connection.disconnect().catch(() => undefined); },
     toyName: connection.info ? `Jimmy ${connection.info.deviceId.slice(-4).toUpperCase()}` : 'Jimmy',
     batteryPercent: toy?.batteryPercent ?? null,
+    /** For stylus games: the stylus lives in Jimmy. */
+    toy: { connected: toy !== null, stylusStowed: toy?.switches.stylusStowed ?? false },
+    records: scores.records,
     lastSync: connection.lastSync,
     calibration, calibrating, calibrate,
     progress,

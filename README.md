@@ -20,6 +20,9 @@ packages/app-kit/           the app's logic with no UI: connection, score moment
 packages/dev-toy/           virtual toy + on-screen panel (development only)
 games/timed-practice/       timed toy practice (every move counts)
 games/drawing/              free drawing and shape challenge (screen games)
+games/tap-quest/            stylus targets, tracing, memory and calm modes (screen game)
+games/shape-recognition/    draw a shape, the game recognizes it (screen game)
+preview/shape-recognition/  local browser test page for shape recognition
 apps/mobile/                Android app (Expo / React Native; frontend)
 firmware/                   XIAO nRF52840 firmware modules + host tests
 ```

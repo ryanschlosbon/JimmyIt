@@ -40,6 +40,9 @@ permissions or connects to real hardware. Expo Go can preview this UI; integrati
   the longest run of consecutive local calendar days. Button Buddy and Super Spinner
   grow from real toy moves in timed practice (and spins from Spin Count on the toy). Games played on the
   toy without the app sync in and count too. The app never invents sample score records.
+- **Tap Quest:** stylus game with Precision, Trace, Memory and Calm modes (`@jimmyit/game-tap-quest`).
+  Difficulty continues from the child's last Tap Quest games. With the toy connected, the screen asks the
+  child to take the stylus out of Jimmy, and pauses if it goes back in; Jimmy celebrates the score moments.
 - **Timed practice:** 30-, 60-, or 90-second practice sessions that count every move on
   the toy (the demo buttons press the virtual toy). Five points per move, with ten points
   of partial credit for an empty attempt. Pause, resume, and finish early without penalties.

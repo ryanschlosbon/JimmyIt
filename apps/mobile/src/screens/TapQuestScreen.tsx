@@ -1,0 +1,140 @@
+import { useEffect, useRef, useState } from 'react';
+import { AppState, View, useWindowDimensions, type GestureResponderEvent, type LayoutRectangle } from 'react-native';
+import Svg, { Circle, Polyline, Text as SvgText } from 'react-native-svg';
+import type { GameRunControls } from '@jimmyit/app-kit';
+import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
+import { Body, Button, Eyebrow, Heading, ProgressBar } from '../components/Controls';
+import { Icon } from '../components/Icon';
+import { TAP_QUEST_MODES } from '../games';
+import type { Theme } from '../theme';
+
+/** The bits of the toy this screen cares about: the stylus lives in Jimmy. */
+export interface TapQuestToy {
+  readonly connected: boolean;
+  readonly stylusStowed: boolean;
+}
+
+export function TapQuestScreen({ theme, run, onStart, toy }: {
+  readonly theme: Theme; readonly run: GameRunControls<TapQuestState, TapQuestAction>;
+  readonly onStart: (mode: TapQuestMode) => void; readonly toy: TapQuestToy;
+}) {
+  const { width } = useWindowDimensions();
+  const compact = width < 680;
+  const [mode, setMode] = useState<TapQuestMode>('precision');
+  const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
+  const [stylusPaused, setStylusPaused] = useState(false);
+  const { status, saveStatus, state, pause, resume, submit } = run;
+  const active = status === 'running' || status === 'paused';
+  const stylusInJimmy = toy.connected && toy.stylusStowed;
+
+  // Leaving the screen or switching apps pauses the game; points are never lost.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', next => { if (next !== 'active') pause(); });
+    return () => { subscription.remove(); pause(); };
+  }, [pause]);
+
+  // Hardware: putting the stylus back into Jimmy pauses the game.
+  const wasStowed = useRef(toy.stylusStowed);
+  useEffect(() => {
+    if (toy.connected && toy.stylusStowed && !wasStowed.current && status === 'running') {
+      pause();
+      setStylusPaused(true);
+    }
+    if (!toy.stylusStowed) setStylusPaused(false);
+    wasStowed.current = toy.stylusStowed;
+  }, [toy.connected, toy.stylusStowed, status, pause]);
+
+  const touch = (event: GestureResponderEvent, phase: 'down' | 'move' | 'up') => {
+    if (status !== 'running') return;
+    const x = Math.max(0, Math.min(1, event.nativeEvent.locationX / layout.width));
+    const y = Math.max(0, Math.min(1, event.nativeEvent.locationY / layout.height));
+    submit({ type: 'touch', phase, point: { x, y } });
+  };
+
+  const size = layout.width;
+  const scale = (value: number) => value * size;
+  const recall = state?.memoryPhase === 'recall';
+  const windowMs = state ? state.settings.targetDurationMs + (state.feedback.generousTiming ? state.settings.timingWindowMs : 0) : 1;
+
+  return <View style={{ gap: 24 }}>
+    <View style={{ gap: 8 }}><Eyebrow theme={theme}>Stylus practice</Eyebrow>
+      <Heading theme={theme} level={1} size={compact ? 36 : 44}>Tap Quest</Heading>
+      <Body theme={theme}>Friendly circles and paths for your stylus. Near misses still count.</Body>
+    </View>
+
+    {toy.connected && <View style={{ backgroundColor: stylusInJimmy ? theme.softCoral : theme.softMint, borderRadius: 18,
+      padding: 18, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+      <Icon name="toy" color={theme.dark ? theme.mint : '#087C71'} />
+      <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
+        {stylusPaused ? 'The stylus is back in Jimmy, so we paused. Take it out and tap Resume.'
+          : stylusInJimmy ? 'Take the stylus out of Jimmy to play.'
+          : 'Stylus out and ready. Jimmy will cheer you on!'}
+      </Body></View>
+    </View>}
+
+    {!active && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+      {TAP_QUEST_MODES.map(option => <Button key={option.mode} theme={theme} label={option.title}
+        selected={mode === option.mode} color={mode === option.mode ? theme.mint : undefined}
+        onPress={() => setMode(option.mode)} disabled={saveStatus === 'saving'} compact />)}
+    </View>}
+    {!active && <Body theme={theme} small>{TAP_QUEST_MODES.find(option => option.mode === mode)?.caption}</Body>}
+
+    <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5, borderRadius: 26,
+      padding: compact ? 14 : 22, gap: 16, alignItems: 'center' }}>
+      {state && active && <View style={{ width: '100%', maxWidth: 560, gap: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Body theme={theme} small>{state.mode === 'calm' ? `${state.matchedCount} circles`
+            : `${Math.min(state.targetIndex + 1, state.targetCount)} of ${state.targetCount}`}</Body>
+          <Body theme={theme} small>{state.score} points</Body>
+        </View>
+        {state.remainingMs !== null && <ProgressBar theme={theme} value={state.remainingMs} max={windowMs}
+          color={theme.teal} label="Time for this target" />}
+        {state.mode === 'memory' && <Body theme={theme} small>{recall ? 'Your turn: tap them in the same order.'
+          : 'Watch the circles light up…'}</Body>}
+      </View>}
+
+      <View accessible accessibilityLabel={active ? 'Tap Quest play area. Touch the circles with your stylus.'
+        : 'Tap Quest play area'}
+        onLayout={event => setLayout(event.nativeEvent.layout)}
+        onStartShouldSetResponder={() => status === 'running'} onMoveShouldSetResponder={() => status === 'running'}
+        onResponderGrant={event => touch(event, 'down')} onResponderMove={event => touch(event, 'move')}
+        onResponderRelease={event => touch(event, 'up')}
+        style={{ width: '100%', maxWidth: 560, aspectRatio: 1, borderRadius: 22, backgroundColor: theme.raised,
+          opacity: status === 'paused' ? .5 : 1, overflow: 'hidden' }}>
+        <Svg width={size} height={layout.height} pointerEvents="none">
+          {state && active && state.mode === 'trace' && <>
+            <Polyline points={state.path.map(point => `${scale(point.x)},${scale(point.y)}`).join(' ')}
+              fill="none" stroke={theme.teal} strokeWidth={scale(state.settings.targetRadius) * 1.4}
+              strokeLinecap="round" strokeLinejoin="round" opacity={.35} />
+            {state.path.map((point, i) => <Circle key={i} cx={scale(point.x)} cy={scale(point.y)} r={6} fill={theme.teal} />)}
+          </>}
+          {state && active && state.mode === 'memory' && state.choices.map((choice, i) => <Circle key={i}
+            cx={scale(choice.x)} cy={scale(choice.y)} r={scale(choice.radius)} fill={theme.surface}
+            stroke={theme.purple} strokeWidth={3} />)}
+          {state?.target && active && <Circle cx={scale(state.target.x)} cy={scale(state.target.y)}
+            r={scale(state.target.radius)} fill={state.mode === 'memory' ? theme.purple : theme.coral}
+            stroke="#203858" strokeWidth={3} />}
+          {!active && <SvgText x={size / 2} y={layout.height / 2} fontSize={22} fill={theme.secondary}
+            textAnchor="middle">{status === 'finished' ? 'Great tapping!' : 'Pick a mode, then Start'}</SvgText>}
+        </Svg>
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {!active && <Button theme={theme} label={status === 'finished' ? 'Play again' : 'Start'} icon="sparkle"
+          color={theme.yellow} onPress={() => { setStylusPaused(false); onStart(mode); }}
+          disabled={saveStatus === 'saving' || stylusInJimmy} />}
+        {status === 'running' && <Button theme={theme} label="Pause" onPress={pause} />}
+        {status === 'paused' && <Button theme={theme} label="Resume" icon="timer" color={theme.yellow}
+          onPress={() => { setStylusPaused(false); resume(); }} disabled={stylusInJimmy} />}
+        {state?.mode === 'memory' && recall && status === 'running' && <Button theme={theme} label="Show me again"
+          icon="undo" onPress={() => submit({ type: 'replaySequence' })} />}
+        {state?.mode === 'calm' && status === 'running' && <Button theme={theme} label="I’m done" icon="check"
+          color={theme.mint} onPress={() => submit({ type: 'finish' })} />}
+        {active && state?.mode !== 'calm' && <Button theme={theme} label="Finish now" icon="check" onPress={run.quit} />}
+        {status === 'finished' && saveStatus === 'failed' && <Button theme={theme} label="Retry saving" icon="check"
+          onPress={run.retrySave} />}
+      </View>
+    </View>
+    <Body theme={theme} small>Take breaks whenever you like. Leaving this screen pauses the game.</Body>
+  </View>;
+}
