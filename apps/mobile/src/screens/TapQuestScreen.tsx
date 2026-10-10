@@ -14,13 +14,16 @@ export interface TapQuestToy {
   readonly stylusStowed: boolean;
 }
 
-export function TapQuestScreen({ theme, run, onStart, toy }: {
+export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoStart, onAutoStarted }: {
   readonly theme: Theme; readonly run: GameRunControls<TapQuestState, TapQuestAction>;
   readonly onStart: (mode: TapQuestMode) => Promise<'local' | 'gemini' | null>; readonly toy: TapQuestToy;
+  /** Chosen on the play screen's banner, and changeable here. */
+  readonly mode: TapQuestMode; readonly onMode: (mode: TapQuestMode) => void;
+  /** True after Play on the banner: start a game as soon as this screen opens, if one can start. */
+  readonly autoStart: boolean; readonly onAutoStarted: () => void;
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 680;
-  const [mode, setMode] = useState<TapQuestMode>('precision');
   const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
   const [stylusPaused, setStylusPaused] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -38,6 +41,13 @@ export function TapQuestScreen({ theme, run, onStart, toy }: {
     }).catch(() => setPatternMessage('Could not start this pattern. Please try again.'))
       .finally(() => setStarting(false));
   };
+
+  // Play on the banner starts straight away, or the moment the stylus comes out of Jimmy.
+  useEffect(() => {
+    if (!autoStart || stylusInJimmy || saveStatus === 'saving') return;
+    onAutoStarted();
+    if (!active) startPattern();
+  }, [autoStart, stylusInJimmy]); // a request, or the stylus coming out, starts a game
 
   // Leaving the screen or switching apps pauses the game; points are never lost.
   useEffect(() => {
@@ -76,10 +86,11 @@ export function TapQuestScreen({ theme, run, onStart, toy }: {
 
     {toy.connected && <View style={{ backgroundColor: stylusInJimmy ? theme.softCoral : theme.softMint, borderRadius: 18,
       padding: 18, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-      <Icon name="toy" color={theme.dark ? theme.mint : '#087C71'} />
+      <Icon name="toy" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {stylusPaused ? 'The stylus is back in Jimmy, so we paused. Take it out and tap Resume.'
-          : stylusInJimmy ? 'Take the stylus out of Jimmy to play.'
+          : stylusInJimmy ? (autoStart ? 'Take the stylus out of Jimmy and the game will start.'
+            : 'Take the stylus out of Jimmy to play.')
           : 'Stylus out and ready. Jimmy will cheer you on!'}
       </Body></View>
     </View>}
@@ -87,7 +98,7 @@ export function TapQuestScreen({ theme, run, onStart, toy }: {
     {!active && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
       {TAP_QUEST_MODES.map(option => <Button key={option.mode} theme={theme} label={option.title}
         selected={mode === option.mode} color={mode === option.mode ? theme.mint : undefined}
-        onPress={() => setMode(option.mode)} disabled={saveStatus === 'saving'} compact />)}
+        onPress={() => onMode(option.mode)} disabled={saveStatus === 'saving'} compact />)}
     </View>}
     {!active && <Body theme={theme} small>{TAP_QUEST_MODES.find(option => option.mode === mode)?.caption}</Body>}
 

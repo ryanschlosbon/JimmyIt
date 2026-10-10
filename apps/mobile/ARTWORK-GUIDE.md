@@ -26,22 +26,20 @@ It plays each time the app launches or its web preview is refreshed. Use
 Copy a local PNG or JPEG into `assets/`, then fill the corresponding slot:
 
 ```ts
-drawingCard: require('../assets/my-drawing-picture.png'),
+bannerArt: { timed: null, tapQuest: null, drawing: require('../assets/my-drawing-picture.png'), shapes: null },
 ```
 
 | Slot | Where it appears |
 | --- | --- |
 | `jimmyFace` | Small Jimmy faces: header, device status, and celebrations |
-| `jimmyHero` | Large Jimmy on the Home welcome card |
-| `drawingCard` | Drawing activity card |
-| `shapesCard` | Shape challenge card |
-| `timedCard` | Timed toy practice card |
-| `rewardsCard` | Rewards activity card |
+| `jimmyHero` | Large Jimmy illustration (not used by the current screens) |
+| `bannerArt.timed` / `.tapQuest` / `.drawing` / `.shapes` | The picture on that game's play-screen banner |
 
-Leave a slot as `null` to use the built-in vector artwork. Transparent PNGs work
+Leave a slot as `null` to use the built-in vector artwork (banner drawings live in
+`src/components/GameArt.tsx`; follow DESIGN.md's illustration rules for new ones). Transparent PNGs work
 well for characters; activity pictures fit inside their rounded card containers.
 The app uses contain sizing, preserving each image's aspect ratio on phones and tablets.
-`jimmyFace` is a square slot; `jimmyHero` is a portrait slot. Give activity art
+`jimmyFace` and `bannerArt` are square slots; `jimmyHero` is a portrait slot. Give activity art
 some breathing room around its edges. Decorative images stay out of the screen
 reader's way, while buttons keep their accessible names.
 

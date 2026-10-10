@@ -2,13 +2,17 @@ import Svg, { Circle, Path, Rect, Polygon, Line, G } from 'react-native-svg';
 
 export type IconName = 'home' | 'pencil' | 'star' | 'settings' | 'arrow' | 'check' | 'lock' | 'undo'
   | 'trash' | 'plus' | 'minus' | 'bluetooth' | 'battery' | 'moon' | 'sun' | 'shapes' | 'toy'
-  | 'spin' | 'sparkle' | 'flame' | 'close' | 'timer';
+  | 'spin' | 'sparkle' | 'flame' | 'close' | 'timer' | 'play' | 'trophy' | 'gear' | 'info'
+  | 'chevronLeft' | 'chevronRight' | 'stylus';
 
-export function Icon({ name, color = '#203858', size = 28 }: {
-  readonly name: IconName; readonly color?: string; readonly size?: number;
+const GEAR_TEETH = [0, 45, 90, 135, 180, 225, 270, 315];
+
+/** Line icons on a 24-unit grid. `weight` is the stroke width; header buttons use a heavier one. */
+export function Icon({ name, color = '#203858', size = 28, weight = 1.8 }: {
+  readonly name: IconName; readonly color?: string; readonly size?: number; readonly weight?: number;
 }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-    <G stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <G stroke={color} strokeWidth={weight} strokeLinecap="round" strokeLinejoin="round">
       {name === 'home' && <><Path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></>}
       {name === 'pencil' && <><Path d="m4 16 12-12a2.8 2.8 0 0 1 4 4L8 20l-5 1Z" /><Path d="m14 6 4 4M4 16l4 4" /></>}
       {(name === 'star' || name === 'sparkle') && <Polygon points="12,2 15,8.2 22,9.2 17,14 18.2,21 12,17.7 5.8,21 7,14 2,9.2 9,8.2" />}
@@ -30,6 +34,19 @@ export function Icon({ name, color = '#203858', size = 28 }: {
       {name === 'flame' && <Path d="M12 2c3 5 1 6 3 9 1-2 2-3 3-4 5 7 3 15-6 15-7 0-10-6-6-12 0 4 2 4 2 4C7 9 12 8 12 2Z" />}
       {name === 'close' && <Path d="m5 5 14 14M19 5 5 19" />}
       {name === 'timer' && <><Circle cx="12" cy="14" r="8" /><Path d="M9 2h6M12 2v4M18 5l2 2M12 10v5l3 2" /></>}
+      {name === 'play' && <Path d="M7 4.6v14.8a1.1 1.1 0 0 0 1.7.9l11.4-7.4a1.1 1.1 0 0 0 0-1.8L8.7 3.7A1.1 1.1 0 0 0 7 4.6Z" />}
+      {name === 'trophy' && <><Path d="M7 3h10v5.5a5 5 0 0 1-10 0Z" /><Path d="M7 5H4.5a3 3 0 0 0 3 4.6M17 5h2.5a3 3 0 0 1-3 4.6" />
+        <Path d="M12 13.5V17M9 17h6v3H9Z" /><Path d="M6.5 21h11" />
+        <Polygon points="12,5.4 12.8,7 14.5,7.2 13.2,8.4 13.6,10 12,9.2 10.4,10 10.8,8.4 9.5,7.2 11.2,7" strokeWidth={1} /></>}
+      {name === 'gear' && <>
+        {GEAR_TEETH.map(angle => <Rect key={angle} x="10.2" y="1.6" width="3.6" height="5" rx="1.2" fill={color}
+          stroke="none" transform={`rotate(${angle} 12 12)`} />)}
+        <Circle cx="12" cy="12" r="5.6" stroke={color} strokeWidth={4.6} />
+      </>}
+      {name === 'info' && <><Circle cx="12" cy="12" r="9.5" /><Path d="M12 11v6" /><Circle cx="12" cy="7.4" r=".6" fill={color} /></>}
+      {name === 'chevronLeft' && <Path d="m15 4-8 8 8 8" />}
+      {name === 'chevronRight' && <Path d="m9 4 8 8-8 8" />}
+      {name === 'stylus' && <><Path d="M17.5 3.5a2.1 2.1 0 0 1 3 3L9 18l-4.5 1.5L6 15Z" /><Path d="m15.5 5.5 3 3M4.5 19.5 3 21" /></>}
     </G>
   </Svg>;
 }

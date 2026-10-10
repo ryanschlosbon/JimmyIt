@@ -2,18 +2,23 @@ import Svg, { Circle, Ellipse, G, Path, Rect, Text as SvgText } from 'react-nati
 import { Image } from 'react-native';
 import { APP_ARTWORK } from '../artwork';
 
-export function Jimmy({ size = 220, face = false, color = '#EF756D' }: {
+export function Jimmy({ size = 220, face = false, color = '#67D0B1' }: {
   readonly size?: number; readonly face?: boolean; readonly color?: string;
 }) {
   const artwork = face ? APP_ARTWORK.jimmyFace : APP_ARTWORK.jimmyHero;
   if (artwork) return <Image source={artwork} resizeMode="contain" accessible={false}
     style={{ width: size, height: face ? size : size * 1.07 }} />;
+  // Traced from design/Jimmy_Face.png: crescent eyes looking right, a smile with a cheeky tongue.
   if (face) return <Svg width={size} height={size} viewBox="0 0 100 100" aria-hidden>
-    <Circle cx="50" cy="50" r="48" fill={color} />
-    <Ellipse cx="33" cy="41" rx="11" ry="13" fill="#96216E" />
-    <Ellipse cx="67" cy="41" rx="11" ry="13" fill="#96216E" />
-    <Path d="M35 64q15 18 30 0" fill="none" stroke="#203858" strokeWidth="4" strokeLinecap="round" />
-    <Circle cx="21" cy="59" r="7" fill="#F49F91" /><Circle cx="79" cy="59" r="7" fill="#F49F91" />
+    <Circle cx="50" cy="50" r="50" fill={color} />
+    <G stroke="#7A0B5A" strokeWidth="1.3" fill="none">
+      <Circle cx="28.8" cy="45.6" r="13.3" /><Circle cx="71.4" cy="45.6" r="13.3" />
+    </G>
+    <Ellipse cx="32" cy="45.6" rx="10.4" ry="12.1" fill="#7A0B5A" />
+    <Ellipse cx="74.6" cy="45.6" rx="10.4" ry="12.1" fill="#7A0B5A" />
+    <Path d="M32.6 68.2Q41 78.6 52 75.2Q58.4 72.6 61.6 64.4" fill="none" stroke="#7A0B5A" strokeWidth="1.4" />
+    <Path d="M61.6 64.4Q72.4 68.4 73.2 74.4Q73.6 80.6 64.4 80.6Q57.4 80.4 50.8 75.6" fill="none"
+      stroke="#7A0B5A" strokeWidth="1.4" strokeLinejoin="round" />
   </Svg>;
   return <Svg width={size} height={size * 1.07} viewBox="0 0 280 300" aria-hidden>
     <Ellipse cx="145" cy="281" rx="80" ry="11" fill="#203858" opacity=".1" />
