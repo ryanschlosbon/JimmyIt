@@ -2,6 +2,8 @@
 // against the simulated fidget.
 import {
   connectFidgetClient,
+  FidgetDeclinedError,
+  type ScoreEvent,
   createManualTime,
   createMemoryKeyValueStore,
   createScoreRepository,
@@ -32,24 +34,25 @@ describe('fidget client against the fake fidget', () => {
   it('connects, reads info and sets the clock', async () => {
     const { client, fidget } = await setup();
     expect(client.info).toMatchObject({ deviceId: '00abc123', protocolVersion: 1, firmwareVersion: '0.1.0' });
-    expect([...client.info.capabilities]).toEqual(['haptics', 'display', 'scoreLog', 'standaloneModes']);
+    expect([...client.info.capabilities]).toEqual(['haptics', 'display', 'scoreLog', 'standaloneModes', 'scoreEvents', 'approval']);
     expect(fidget.clockUnixSeconds).toBe(START_MS / 1000);
   });
 
   it('turns toy input into events and state', async () => {
     const { fidget, client, events } = await setup();
     fidget.tap('clicker');
-    fidget.press('flapButtoned');
+    fidget.press('sliderLow');
     fidget.spin(-90);
     fidget.turnScrew(3);
     expect(events).toEqual([
       { type: 'switchDown', switchId: 'clicker' },
       { type: 'switchUp', switchId: 'clicker', heldMs: 0 },
-      { type: 'switchDown', switchId: 'flapButtoned' },
+      { type: 'switchDown', switchId: 'sliderLow' },
       { type: 'spin', deltaDeg: -90, totalDeg: -90 },
       { type: 'screw', deltaDetents: 3, position: 3 },
     ]);
-    expect(client.getState().switches.flapButtoned).toBe(true);
+    expect(client.getState().switches.sliderLow).toBe(true);
+    expect(client.getState().switches.stylusStowed).toBe(true);
     expect(client.getInputStats().lostPackets).toBe(0);
   });
 
@@ -86,7 +89,13 @@ describe('fidget client against the fake fidget', () => {
   it('times out a fetch the fidget never answers', async () => {
     const time = createManualTime(START_MS);
     const fidget = createFakeFidget({ clock: time.clock });
-    const silent = { ...fidget.transport, write: async () => undefined };
+    // A toy that answers everything except sync requests.
+    const silent = {
+      ...fidget.transport,
+      write: async (characteristic: 'command', bytes: Uint8Array) => {
+        if (bytes[0] !== 0x30) await fidget.transport.write(characteristic, bytes);
+      },
+    };
     const client = await connectFidgetClient(silent, { clock: time.clock, scheduler: time.scheduler, syncClockOnConnect: false });
     const pending = client.fetchRecords(0);
     time.advance(5_000);
@@ -149,5 +158,78 @@ describe('score sync between fidget and app', () => {
     expect(result.initial).toEqual({ fetched: 1, added: 1, cursor: 1 });
     expect(fresh.bests.get(BasicModeId.spinCount)).toBe(200);
     result.stop();
+  });
+});
+
+describe('the child says yes on the toy', () => {
+  it('waits for the answer, then remembers the phone', async () => {
+    const time = createManualTime(START_MS);
+    const fidget = createFakeFidget({ clock: time.clock, approval: 'ask' });
+    let pending = 0;
+    const connecting = connectFidgetClient(fidget.transport, {
+      clock: time.clock,
+      scheduler: time.scheduler,
+      appId: 42,
+      appName: "Ryan's Pixel",
+      onApprovalPending: () => pending++,
+    });
+    await vi.waitFor(() => expect(fidget.approvalRequest).toEqual({ appId: 42, name: "Ryan's Pixel" }));
+    expect(pending).toBe(1);
+    fidget.press('navRight'); // yes
+    const client = await connecting;
+    expect(fidget.approved).toBe(true);
+    await client.disconnect();
+
+    fidget.reconnect();
+    const again = await connectFidgetClient(fidget.transport, { clock: time.clock, scheduler: time.scheduler, appId: 42 });
+    expect(again.connected).toBe(true);
+    expect(fidget.approvalRequest).toBeNull();
+  });
+
+  it('refuses the phone when the child says no, and sends it nothing before', async () => {
+    const time = createManualTime(START_MS);
+    const fidget = createFakeFidget({ clock: time.clock, approval: 'ask' });
+    const inputs: Uint8Array[] = [];
+    fidget.transport.subscribe('input', (bytes) => inputs.push(bytes));
+    const connecting = connectFidgetClient(fidget.transport, { clock: time.clock, scheduler: time.scheduler, appId: 7 });
+    await vi.waitFor(() => expect(fidget.approvalRequest).not.toBeNull());
+    fidget.tap('clicker');
+    expect(inputs).toHaveLength(0); // nothing reaches an unapproved phone
+    fidget.press('navLeft'); // no
+    await expect(connecting).rejects.toThrow(FidgetDeclinedError);
+    expect(fidget.linked).toBe(false);
+  });
+
+  it('gives up when nobody answers', async () => {
+    const time = createManualTime(START_MS);
+    const fidget = createFakeFidget({ clock: time.clock, approval: 'ask' });
+    const connecting = connectFidgetClient(fidget.transport, { clock: time.clock, scheduler: time.scheduler, approvalTimeoutMs: 30_000 });
+    await vi.waitFor(() => expect(fidget.approvalRequest).not.toBeNull());
+    time.advance(30_000);
+    await expect(connecting).rejects.toThrow(FidgetTimeoutError);
+  });
+});
+
+describe('score events', () => {
+  it('lets the app make the toy celebrate', async () => {
+    const { client, fidget } = await setup();
+    await client.sendScoreEvent({ kind: 'newBest', score: 260, value: 250 });
+    expect(fidget.lastCelebration).toMatchObject({ kind: 'newBest', score: 260, value: 250, source: 'app' });
+  });
+
+  it('streams moments from the toy\'s own game to the app as they happen', async () => {
+    const { client, fidget } = await setup();
+    fidget.finishStandaloneGame({ modeId: BasicModeId.freePlay, score: 30, durationS: 10 }); // earlier best: 30
+    const events: ScoreEvent[] = [];
+    client.onScoreEvent((event) => events.push(event));
+    fidget.playStandaloneGame({ modeId: BasicModeId.freePlay, moves: 11, durationS: 40 });
+    expect(events[0]).toEqual({ kind: 'gameStart', gameId: 'fidget-free-play', source: 'toy', score: 0, value: 30 });
+    expect(events.filter((e) => e.kind === 'points')).toHaveLength(11);
+    expect(events.filter((e) => e.kind !== 'points').map((e) => [e.kind, e.score, e.value])).toEqual([
+      ['gameStart', 0, 30],
+      ['newBest', 40, 30],
+      ['milestone', 100, 100],
+      ['gameEnd', 110, 30],
+    ]);
   });
 });

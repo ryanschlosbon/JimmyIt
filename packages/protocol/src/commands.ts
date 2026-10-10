@@ -6,18 +6,22 @@ import {
   MAX_HAPTIC_EFFECT_ID,
   MAX_HAPTIC_EFFECTS,
   MAX_STARS,
+  MAX_APP_NAME_LENGTH,
   MAX_TEXT_LENGTH,
+  ScoreEventKind,
 } from './constants';
 
 /** App → fidget command, wire-faithful. See PROTOCOL.md "command". */
 export type Command =
   | { readonly type: 'setTime'; readonly unixSeconds: number }
   | { readonly type: 'setMode'; readonly mode: number }
+  | { readonly type: 'hello'; readonly appId: number; readonly name: string }
   | { readonly type: 'haptic'; readonly effects: readonly number[] }
   | { readonly type: 'showText'; readonly line: number; readonly text: string }
   | { readonly type: 'showScore'; readonly score: number; readonly best: number; readonly stars: number }
   | { readonly type: 'showProgress'; readonly percent: number; readonly label: string }
   | { readonly type: 'clearDisplay' }
+  | { readonly type: 'scoreEvent'; readonly kind: number; readonly score: number; readonly value: number }
   | { readonly type: 'syncRequest'; readonly afterRecordId: number }
   | { readonly type: 'syncAck'; readonly upToRecordId: number }
   | { readonly type: 'setBest'; readonly modeId: number; readonly score: number };
@@ -36,6 +40,12 @@ function checkMode(mode: number): void {
   }
 }
 
+function checkEventKind(kind: number): void {
+  if (!(Object.values(ScoreEventKind) as number[]).includes(kind)) {
+    throw new ProtocolError(`unknown score event kind ${kind}`);
+  }
+}
+
 function checkEffects(effects: readonly number[]): void {
   if (effects.length < 1 || effects.length > MAX_HAPTIC_EFFECTS) {
     throw new ProtocolError(`haptic needs 1-${MAX_HAPTIC_EFFECTS} effects, got ${effects.length}`);
@@ -51,6 +61,8 @@ export function encodeCommand(command: Command): Uint8Array {
     case 'setMode':
       checkMode(command.mode);
       return w.u8(command.mode, 'mode').finish();
+    case 'hello':
+      return w.u32(command.appId, 'appId').ascii(command.name, MAX_APP_NAME_LENGTH).finish();
     case 'haptic':
       checkEffects(command.effects);
       for (const effect of command.effects) w.u8(effect, 'effect');
@@ -66,6 +78,9 @@ export function encodeCommand(command: Command): Uint8Array {
       return w.u8(command.percent, 'percent').ascii(command.label, MAX_TEXT_LENGTH).finish();
     case 'clearDisplay':
       return w.finish();
+    case 'scoreEvent':
+      checkEventKind(command.kind);
+      return w.u8(command.kind, 'kind').u32(command.score, 'score').u32(command.value, 'value').finish();
     case 'syncRequest':
       return w.u32(command.afterRecordId, 'afterRecordId').finish();
     case 'syncAck':
@@ -88,6 +103,12 @@ export function decodeCommand(bytes: Uint8Array): Command {
       command = { type: 'setMode', mode: r.u8() };
       checkMode(command.mode);
       break;
+    case CommandOpcode.hello: {
+      const appId = r.u32();
+      if (r.remaining() > MAX_APP_NAME_LENGTH) throw new ProtocolError('hello: name too long');
+      command = { type: 'hello', appId, name: r.restAscii() };
+      break;
+    }
     case CommandOpcode.haptic: {
       const effects: number[] = [];
       while (r.remaining() > 0) effects.push(r.u8());
@@ -115,6 +136,10 @@ export function decodeCommand(bytes: Uint8Array): Command {
     }
     case CommandOpcode.clearDisplay:
       command = { type: 'clearDisplay' };
+      break;
+    case CommandOpcode.scoreEvent:
+      command = { type: 'scoreEvent', kind: r.u8(), score: r.u32(), value: r.u32() };
+      checkEventKind(command.kind);
       break;
     case CommandOpcode.syncRequest:
       command = { type: 'syncRequest', afterRecordId: r.u32() };

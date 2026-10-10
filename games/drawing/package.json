@@ -1,8 +1,8 @@
 {
-  "name": "@jimmyit/game-squeeze-hold",
+  "name": "@jimmyit/game-drawing",
   "version": "0.1.0",
   "private": true,
-  "description": "Example minigame: hold the squeeze inside a target band.",
+  "description": "Screen drawing games (free drawing, shape challenge) and the stroke model their views use.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

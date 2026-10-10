@@ -19,8 +19,10 @@ void bleTakeLinkEvents(bool& connected, bool& disconnected);
 bool bleTakeCommand(CommandBytes& out);
 // True once after a command was dropped because the queue was full.
 bool bleTakeDroppedCommand();
-// Updates the `input` value for reads and notifies it if the app subscribed.
-void bleSetInput(const jimmyit::InputPacket& packet);
+// Updates the `input` value for reads and, if `notify` and the app subscribed, notifies it.
+void bleSetInput(const jimmyit::InputPacket& packet, bool notify);
 // Notifies one `message`. Returns false if nobody is subscribed or it failed.
 bool bleSendMessage(const void* data, uint16_t length);
 void bleSetInfo(const jimmyit::DeviceInfo& info);
+// Drops the current phone (after the child said no).
+void bleDisconnect();

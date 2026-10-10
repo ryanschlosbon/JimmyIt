@@ -5,7 +5,23 @@
     "version": "0.1.0",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
-    "android": { "package": "com.jimmyit.mobile" },
-    "web": { "name": "Jimmy — a little play, a lot of possibility", "bundler": "metro" }
+    "android": {
+      "package": "com.jimmyit.mobile"
+    },
+    "web": {
+      "name": "Jimmy \u2014 a little play, a lot of possibility",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "neverForLocation": true,
+          "modes": [],
+          "bluetoothAlwaysPermission": "Jimmy uses Bluetooth to play with your Jimmy toy."
+        }
+      ]
+    ]
   }
 }

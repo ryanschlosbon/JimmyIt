@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingReducer, strokeToPath, type Stroke } from './drawing';
+import { drawingReducer, strokeToPath, type Stroke } from './drawing-model';
 
 describe('drawing strokes', () => {
   it('keeps earlier strokes immutable and undoes one whole stroke', () => {

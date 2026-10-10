@@ -24,7 +24,8 @@ RecordMessage toRecordMessage(const ScoreEntry& entry);
 
 class ScoreLog {
  public:
-  static constexpr size_t kCapacity = 64;
+  // About a week of heavy offline play. RAM ~4.8 KB, flash file ~4 KB (nRF52840: 256 KB RAM, 1 MB flash).
+  static constexpr size_t kCapacity = 200;
   static constexpr uint8_t kMaxModeId = 63;
 
   ScoreLog();

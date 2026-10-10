@@ -10,7 +10,7 @@ export type DrawingAction =
   | { readonly type: 'undo' }
   | { readonly type: 'clear' };
 
-/** Stores vector strokes so resizing and switching themes never erase a drawing. */
+/** Stores vector strokes (coordinates in the canvas’s own units) so resizing and switching themes never erase a drawing. */
 export function drawingReducer(strokes: readonly Stroke[], action: DrawingAction): readonly Stroke[] {
   if (action.type === 'clear') return [];
   if (action.type === 'undo') return strokes.slice(0, -1);

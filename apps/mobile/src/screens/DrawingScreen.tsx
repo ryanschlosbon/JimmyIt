@@ -4,8 +4,8 @@ import { Body, Button, Eyebrow, Heading } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { DrawingCanvas } from '../components/DrawingCanvas';
 import type { Theme } from '../theme';
-import type { Activity } from '../progress';
-import type { DrawingAction, Stroke } from '../drawing';
+import type { Activity } from '../games';
+import type { DrawingAction, Stroke } from '@jimmyit/game-drawing';
 
 const PALETTE = [
   { name: 'Ocean blue', color: '#3387D6' }, { name: 'Coral', color: '#D85E57' },

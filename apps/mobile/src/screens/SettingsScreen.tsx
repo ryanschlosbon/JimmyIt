@@ -10,8 +10,10 @@ export function SettingsScreen({ theme, state, replayIntro }: {
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 850;
-  const status = state.connection === 'connected' ? 'Connected' : state.connection === 'searching' ? 'Searching…' : 'Disconnected';
-  const color = state.connection === 'connected' ? theme.mint : state.connection === 'searching' ? theme.yellow : theme.coral;
+  const status = state.connection === 'connected' ? 'Connected' : state.connection === 'searching' ? 'Searching…'
+    : state.connection === 'confirming' ? 'Waiting for a yes on Jimmy' : 'Disconnected';
+  const color = state.connection === 'connected' ? theme.mint
+    : state.connection === 'searching' || state.connection === 'confirming' ? theme.yellow : theme.coral;
   const panels: readonly { title: string; eyebrow: string; icon: IconName; color: string }[] = [
     { title: 'Connection', eyebrow: 'BLUETOOTH', icon: 'bluetooth', color: theme.mint },
     { title: 'Calibration', eyebrow: 'SENSITIVITY', icon: 'toy', color: theme.coral },
@@ -27,12 +29,14 @@ export function SettingsScreen({ theme, state, replayIntro }: {
       borderColor: theme.border, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
       <Jimmy face size={76} color={color} />
       <View style={{ flex: 1, minWidth: 160, gap: 3 }}><Eyebrow theme={theme}>Your Jimmy</Eyebrow>
-        <Heading theme={theme} size={29}>Jimmy 01</Heading>
-        <View accessibilityLiveRegion="polite"><Body theme={theme} small>{status} · Simulated device</Body></View>
+        <Heading theme={theme} size={29}>{state.toyName}</Heading>
+        <View accessibilityLiveRegion="polite"><Body theme={theme} small>{status} · {state.connectorKind === 'simulated'
+          ? 'Virtual toy' : state.connectorKind === 'bluetooth' ? 'Bluetooth' : 'No toy connection in this build'}</Body></View>
       </View>
       <View style={{ flexDirection: 'row', gap: 10, backgroundColor: theme.raised, borderRadius: 16, padding: 16 }}>
         <Icon name="battery" color={theme.dark ? theme.mint : '#087C71'} />
-        <Body theme={theme} small>{state.connection === 'connected' ? '84% battery' : 'Battery —'}</Body>
+        <Body theme={theme} small>{state.connection === 'connected' && state.batteryPercent !== null
+          ? `${state.batteryPercent}% battery` : 'Battery —'}</Body>
       </View>
     </View>
     <View style={{ flexDirection: compact ? 'column' : 'row', gap: 20 }}>
@@ -48,12 +52,15 @@ export function SettingsScreen({ theme, state, replayIntro }: {
           <View style={{ gap: 7 }}><Eyebrow theme={theme}>{panel.eyebrow}</Eyebrow><Heading theme={theme} size={30}>{panel.title}</Heading></View>
           {index === 0 && <>
             <Body theme={theme} small>{state.connection === 'connected' ? 'Jimmy is ready for your next adventure.'
-              : state.connection === 'searching' ? 'Looking for your little play partner…' : 'Find Jimmy to try the connection demo.'}</Body>
+              : state.connection === 'searching' ? 'Looking for your little play partner…'
+              : state.connection === 'confirming' ? 'Jimmy is asking if this device may connect. Press the right button on Jimmy to say yes.'
+              : 'Find Jimmy to start playing together.'}</Body>
             <Button theme={theme} color={theme.mint} icon="bluetooth"
-              label={state.connection === 'connected' ? 'Disconnect' : state.connection === 'searching' ? 'Cancel search' : 'Find Jimmy'}
+              label={state.connection === 'connected' ? 'Disconnect'
+                : state.connection === 'searching' || state.connection === 'confirming' ? 'Cancel' : 'Find Jimmy'}
               onPress={state.connection === 'disconnected' ? state.connect : state.disconnect} />
             <Button theme={theme} label="Reconnect" icon="spin" onPress={state.connect}
-              disabled={state.connection === 'searching'} />
+              disabled={state.connection === 'searching' || state.connection === 'confirming'} />
           </>}
           {index === 1 && <>
             <Body theme={theme} small>Place Jimmy on a flat surface. Keep the controls still while we get ready.</Body>
@@ -89,7 +96,8 @@ export function SettingsScreen({ theme, state, replayIntro }: {
     <View style={{ flexDirection: 'row', gap: 14, backgroundColor: theme.raised, borderRadius: 18, padding: 22 }}>
       <Icon name="sparkle" color={theme.dark ? theme.yellow : '#8A6500'} />
       <View style={{ flex: 1, gap: 4 }}><Heading theme={theme} size={23}>A safe place to practice</Heading>
-        <Body theme={theme} small>Connection and calibration are simulated in this frontend preview. Drawings and points stay on this device.</Body>
+        <Body theme={theme} small>{state.connectorKind === 'simulated' ? 'This preview uses a virtual Jimmy (the Toy button). Calibration is simulated.'
+          : 'Calibration is simulated for now.'} Drawings and points stay on this device.</Body>
       </View>
     </View>
     <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5,

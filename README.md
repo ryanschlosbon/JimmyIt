@@ -16,8 +16,11 @@ packages/core/              input handling, scoring, score storage, toy⇄app sc
 packages/fake-fidget/       simulated toy for development and tests
 packages/ble-react-native/  real Bluetooth transport (react-native-ble-plx)
 packages/game-sdk/          what a minigame can use, game runner, test harness
-games/squeeze-hold/         example minigame
-apps/mobile/                Android app (frontend, not created yet)
+packages/app-kit/           the app's logic with no UI: connection, score moments, rewards, React hooks
+packages/dev-toy/           virtual toy + on-screen panel (development only)
+games/timed-practice/       timed toy practice (every move counts)
+games/drawing/              free drawing and shape challenge (screen games)
+apps/mobile/                Android app (Expo / React Native; frontend)
 firmware/                   XIAO nRF52840 firmware modules + host tests
 ```
 

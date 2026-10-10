@@ -1,54 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { connectFidgetClient, type FidgetClient, type ScoreRecord } from '@jimmyit/core';
-import { createProgressService, getProgress, type DrawingSession } from './progress';
+import { type ConnectionErrorKind, useConnection, useScores, useToyState } from '@jimmyit/app-kit';
+import { BADGE_VISUALS } from './badge-visuals';
+import { GAME_CATALOG } from './games';
 
-export type Connection = 'connected' | 'disconnected' | 'searching';
+/** 'confirming': Jimmy is asking the child "connect to this phone?" on its screen. */
+export type Connection = 'connected' | 'disconnected' | 'searching' | 'confirming';
 
-async function connectDemoClient(): Promise<FidgetClient | null> {
-  // Native production builds keep the fake protocol device out of the app.
-  // The frontend's clearly labelled UI simulation remains available in previews.
-  if (!__DEV__) return null;
-  const { createFakeFidget } = await import('@jimmyit/fake-fidget');
-  const fake = createFakeFidget();
-  const next = await connectFidgetClient(fake.transport);
-  fake.setBattery(84);
-  return next;
-}
+/** Child-friendly wording for each connection problem app-kit can report. */
+const CONNECTION_MESSAGES: Readonly<Record<ConnectionErrorKind, string>> = {
+  unavailable: 'Bluetooth isn’t ready in this version of the app yet.',
+  notFound: 'Jimmy is taking a little break. Try finding Jimmy again.',
+  lost: 'Jimmy wandered off. Bring Jimmy closer and find Jimmy again.',
+  versionMismatch: 'Jimmy needs a quick update before you can play together.',
+  declined: 'Jimmy didn’t get a yes. When Jimmy asks, press the right button to say yes.',
+  syncFailed: 'Some of Jimmy’s scores haven’t come over yet. They’re safe on Jimmy.',
+};
 
+/** Screen-facing state for the current design. Game and score logic live in @jimmyit/app-kit. */
 export function useJimmy() {
-  const [service] = useState(() => createProgressService(AsyncStorage));
-  const [records, setRecords] = useState<readonly ScoreRecord[]>([]);
+  const connection = useConnection();
+  const scores = useScores({ games: GAME_CATALOG });
+  const toy = useToyState();
   const [dark, setDarkState] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [connection, setConnection] = useState<Connection>('disconnected');
+  const [appearanceReady, setAppearanceReady] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [calibration, setCalibration] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
-  const client = useRef<FidgetClient | null>(null);
-  const generation = useRef(0);
-  const connectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const calibrationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let active = true;
-    const refresh = () => {
-      service.repository.list().then(result => { if (active) setRecords(result); })
-        .catch(() => { if (active) setError('Your saved progress could not be opened. It has been kept safe.'); });
-    };
-    refresh();
-    const unsubscribe = service.repository.onChange(refresh);
     AsyncStorage.getItem('jimmy.appearance').then(value => { if (active) setDarkState(value === 'dark'); })
-      .catch(() => { if (active) setError('Your appearance preference could not be opened.'); })
-      .finally(() => { if (active) setReady(true); });
-    return () => { active = false; unsubscribe(); };
-  }, [service]);
-
-  useEffect(() => () => {
-    generation.current += 1;
-    if (connectTimer.current) clearTimeout(connectTimer.current);
-    if (calibrationTimer.current) clearInterval(calibrationTimer.current);
-    client.current?.disconnect().catch(() => undefined);
+      .catch(() => { if (active) setLocalError('Your appearance preference could not be opened.'); })
+      .finally(() => { if (active) setAppearanceReady(true); });
+    return () => { active = false; };
   }, []);
 
   const stopCalibration = () => {
@@ -56,37 +42,12 @@ export function useJimmy() {
     calibrationTimer.current = null;
     setCalibrating(false);
   };
+  useEffect(() => () => stopCalibration(), []);
+  useEffect(() => { if (connection.status !== 'connected') stopCalibration(); }, [connection.status]);
 
-  const disconnect = () => {
-    generation.current += 1;
-    if (connectTimer.current) clearTimeout(connectTimer.current);
-    stopCalibration();
-    const previous = client.current;
-    client.current = null;
-    setConnection('disconnected');
-    previous?.disconnect().catch(() => setError('Jimmy could not finish disconnecting. Please try reconnecting.'));
-  };
-
-  const connect = () => {
-    disconnect();
-    const current = generation.current;
-    setConnection('searching');
-    connectTimer.current = setTimeout(() => {
-      connectDemoClient().then(async next => {
-        if (current !== generation.current) { await next?.disconnect(); return; }
-        client.current = next;
-        setConnection('connected');
-      }).catch(() => {
-        if (current === generation.current) {
-          setConnection('disconnected');
-          setError('Jimmy is taking a little break. Try finding Jimmy again.');
-        }
-      });
-    }, 1600);
-  };
-
+  // Calibration is still a UI simulation: it never changes values on the toy.
   const calibrate = () => {
-    if (connection !== 'connected' || calibrating) return;
+    if (connection.status !== 'connected' || calibrating) return;
     setCalibration(0);
     setCalibrating(true);
     let percent = 0;
@@ -100,18 +61,33 @@ export function useJimmy() {
   const setDark = (next: boolean) => {
     setDarkState(next);
     AsyncStorage.setItem('jimmy.appearance', next ? 'dark' : 'light')
-      .catch(() => setError('Your appearance changed, but could not be saved for next time.'));
+      .catch(() => setLocalError('Your appearance changed, but could not be saved for next time.'));
   };
 
-  const finish = async (session: DrawingSession) => {
-    await service.finish(session);
-    if (client.current?.connected) {
-      client.current.showScore({ score: session.strokes > 0 ? 50 : 10, stars: session.strokes > 0 ? 3 : 1 })
-        .catch(() => setError('Your points are saved. Jimmy’s display will catch up when you reconnect.'));
-    }
-  };
+  const progress = useMemo(() => ({
+    ...scores.progress,
+    badges: scores.progress.badges.map(badge => ({ ...badge, ...BADGE_VISUALS[badge.id] })),
+  }), [scores.progress]);
 
-  return { dark, setDark, ready, error, setError, connection, connect, disconnect,
-    calibration, calibrating, calibrate, finish, finishTimed: service.finishTimed, progress: getProgress(records) };
+  const error = localError
+    ?? (scores.error ? 'Your saved progress could not be opened. It has been kept safe.' : null)
+    ?? (connection.error ? CONNECTION_MESSAGES[connection.error.kind] : null);
+
+  return {
+    dark, setDark,
+    ready: appearanceReady && !scores.loading,
+    error,
+    setError: (message: string | null) => { setLocalError(message); if (message === null) connection.clearError(); },
+    connection: (connection.status === 'awaitingApproval' ? 'confirming' : connection.status) as Connection,
+    connectorKind: connection.connectorKind,
+    connect: () => { connection.connect().catch(() => undefined); },
+    disconnect: () => { connection.disconnect().catch(() => undefined); },
+    toyName: connection.info ? `Jimmy ${connection.info.deviceId.slice(-4).toUpperCase()}` : 'Jimmy',
+    batteryPercent: toy?.batteryPercent ?? null,
+    lastSync: connection.lastSync,
+    calibration, calibrating, calibrate,
+    progress,
+    scoreboard: scores.scoreboard,
+  };
 }
 export type JimmyState = ReturnType<typeof useJimmy>;

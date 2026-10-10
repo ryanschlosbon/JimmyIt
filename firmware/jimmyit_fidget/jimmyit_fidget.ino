@@ -1,16 +1,26 @@
 // JimmyIt fidget firmware. Board: "Seeed nRF52 Boards" > "Seeed XIAO nRF52840".
 //
 // Grew out of the KnightHacks breadboard sketch "Fidget Quest": same screens and
-// +10-points-per-press game, now non-blocking, saved to flash, and talking to the
+// +10-points-per-move game, now non-blocking, saved to flash, and talking to the
 // app over Bluetooth (spec: packages/protocol/PROTOCOL.md).
 //
+// - Without the app the toy plays by itself: the first move starts Free Play and
+//   scores; the game ends once the child takes too long for the next move.
+//   Every game is saved to flash and uploaded the next time the app connects.
+// - Score moments (game start, points, every 100, new high score, game end) play
+//   an animation and a haptic, whether the toy or the app is running the game.
+// - A phone may only connect once the child says yes on the toy (left = no,
+//   right = yes); approved phones are remembered.
+//
 // Files: board_config.h (what is wired up), hardware_inputs (reading parts),
-// oled_ui (screens), ble_link (Bluetooth), haptics, score_storage (flash).
-// Logic that can run on a laptop is in src/ and tested by `npm run test:firmware`.
+// oled_ui (screens and animations), ble_link (Bluetooth), haptics,
+// battery_monitor, score_storage (flash). Logic that can run on a laptop is in
+// src/ and tested by `npm run test:firmware`.
 
 #include <Arduino.h>
 #include <Wire.h>
 
+#include "battery_monitor.h"
 #include "ble_link.h"
 #include "board_config.h"
 #include "hardware_inputs.h"
@@ -18,40 +28,67 @@
 #include "oled_ui.h"
 #include "score_storage.h"
 #include "src/basic_modes.h"
+#include "src/celebration.h"
+#include "src/connection_approval.h"
 #include "src/fidget_protocol.h"
 #include "src/input_helpers.h"
+#include "src/score_events.h"
 #include "src/score_log.h"
 
 using namespace jimmyit;
 
-enum class Screen : uint8_t { Welcome, Instructions, Countdown, Playing, Achievement, Result, PressToPlay, App };
+enum class Screen : uint8_t { Welcome, Instructions, Ready, Playing, Result, Notice, App };
 
 constexpr uint32_t kWelcomeMs = 5000;
 constexpr uint32_t kInstructionsMs = 10000;
-constexpr uint32_t kCountdownStepMs = 1000;
-constexpr uint8_t kCountdownFrom = 3;
-constexpr uint32_t kAchievementMs = 2000;
 constexpr uint32_t kResultMs = 4000;
-constexpr uint32_t kPointsPerAchievement = 100;
+constexpr uint32_t kNoticeMs = 2000;
+constexpr uint32_t kForgetPhonesHoldMs = 5000;
+constexpr uint32_t kDeclineDisconnectDelayMs = 300;  // lets the "declined" message go out first
+constexpr uint32_t kAnimationFrameMs = 60;
 constexpr uint32_t kMinNotifyGapMs = 20;  // at most 50 input notifications a second
 constexpr uint32_t kHeartbeatMs = 1000;
-constexpr uint8_t kStandaloneGame = BasicModeId::kFreePlay;
+
+// Games the toy offers by itself; the menu keys pick one on the Ready screen.
+// Spin Count needs the spinner sensor, so the breadboard only has Free Play.
+constexpr uint8_t kToyGames[] = {
+    BasicModeId::kFreePlay,
+#if JIMMYIT_HAS_AS5600
+    BasicModeId::kSpinCount,
+#endif
+};
+constexpr size_t kToyGameCount = sizeof(kToyGames) / sizeof(kToyGames[0]);
+constexpr uint16_t kNavBits = (1u << SwitchBit::kNavLeft) | (1u << SwitchBit::kNavRight);
+// While there is a menu, the menu keys choose a game on Ready instead of starting one.
+constexpr uint16_t kMenuBits = kToyGameCount > 1 ? kNavBits : 0;
 
 namespace {
 
 Screen screen = Screen::Welcome;
 uint32_t screenStartMs = 0;
 bool redraw = true;
-uint8_t countdownShown = 0;
+size_t selectedGame = 0;
+uint32_t secondsLeftShown = 0;
 bool linked = false;
 
 uint8_t fidgetMode = FidgetMode::kStandalone;
 ScoreLog scoreLog;
 BasicGame game;
-uint32_t achievementsShown = 0;
+ScoreEventTracker scoreEvents;
+Celebration celebration;
+uint32_t lastFrameMs = 0;
+bool wasAnimating = false;
 uint32_t resultScore = 0;
 bool resultNewBest = false;
 AppDisplay appDisplay = {};
+const char* noticeText = "";
+
+ConnectionApproval approval;
+ApprovedApps approvedApps;
+uint32_t promptSecondsShown = 0;
+bool disconnectPending = false;
+uint32_t disconnectAtMs = 0;
+uint32_t bothMenuKeysSinceMs = 0;
 
 SwitchDebouncer debouncer(kDebounceMs);
 SpinnerTracker spinner;
@@ -59,7 +96,7 @@ InputPacket current = {};
 InputPacket lastSent = {};
 bool sentOnce = false;
 uint16_t pressedForNotify = 0;  // presses not yet reported to the app
-uint16_t pressedForGame = 0;    // presses not yet given to the game
+uint16_t pressedForGame = 0;    // presses not yet given to the game or a prompt
 uint32_t lastNotifyMs = 0;
 
 bool clockSet = false;
@@ -76,6 +113,7 @@ DeviceInfo makeInfo() {
   info.firmwarePatch = JIMMYIT_FIRMWARE_PATCH;
   info.deviceId = NRF_FICR->DEVICEID[0];
   info.capabilities = Capability::kDisplay | Capability::kScoreLog | Capability::kStandaloneModes |
+                      Capability::kScoreEvents | Capability::kApproval |
                       (hapticsAvailable() ? Capability::kHaptics : 0);
   info.newestRecordId = scoreLog.newestRecordId();
   info.storedRecordCount = static_cast<uint16_t>(scoreLog.count());
@@ -85,18 +123,48 @@ DeviceInfo makeInfo() {
 void goTo(Screen next, uint32_t nowMs) {
   screen = next;
   screenStartMs = nowMs;
-  countdownShown = 0;
   redraw = true;
+}
+
+const char* gameTitle(uint8_t modeId) { return modeId == BasicModeId::kSpinCount ? "SPIN COUNT" : "FREE PLAY"; }
+
+// ---- Celebrations (score events) --------------------------------------------
+
+// Animation + haptic for one score moment. A bigger animation that is still
+// playing wins, and then this moment stays quiet (no haptic either).
+void celebrate(uint8_t kind, uint32_t score, uint32_t value, uint32_t nowMs, bool newBestAtEnd = false) {
+  if (!celebration.start(kind, score, value, nowMs, newBestAtEnd)) return;
+  const CelebrationStyle style = celebrationStyle(kind, newBestAtEnd);
+  hapticsPlay(style.effects, style.effectCount);
+  lastFrameMs = 0;  // draw the first frame now
+}
+
+// A moment in a game the toy is running: celebrate here and tell the app.
+void emitScoreEvent(const ScoreEvent& event, uint32_t nowMs, bool newBestAtEnd = false) {
+  celebrate(event.kind, event.score, event.value, nowMs, newBestAtEnd);
+  if (!approval.approved()) return;
+  ScoreEventMessage message = {};
+  message.type = MessageType::kScoreEvent;
+  message.kind = event.kind;
+  message.modeId = game.modeId();
+  message.score = event.score;
+  message.value = event.value;
+  bleSendMessage(&message, sizeof(message));
+}
+
+void emitScoreChanges(uint32_t nowMs) {
+  ScoreEvent events[ScoreEventTracker::kMaxEventsPerChange];
+  const size_t count = scoreEvents.onScore(game.score(), events, ScoreEventTracker::kMaxEventsPerChange);
+  for (size_t i = 0; i < count; i++) emitScoreEvent(events[i], nowMs);
 }
 
 // ---- Scores ---------------------------------------------------------------
 
-void startGame(uint32_t nowMs) {
-  game.start(kStandaloneGame, nowMs, clockSet ? unixNow(nowMs) : nowMs / 1000, clockSet);
+// Ready screen: the selected game waits for the child's first move.
+void armGame(uint32_t nowMs) {
+  game.arm(kToyGames[selectedGame], nowMs, clockSet ? unixNow(nowMs) : nowMs / 1000, clockSet);
   pressedForGame = 0;
-  achievementsShown = 0;
-  Serial.println("Game started");
-  goTo(Screen::Playing, nowMs);
+  goTo(Screen::Ready, nowMs);
 }
 
 // Saves a finished game to flash and sends it to the app if one is listening.
@@ -112,6 +180,7 @@ void recordFinishedGame() {
   scoreLog.raiseBest(entry.modeId, entry.score);
   if (!storageSave(scoreLog)) Serial.println("Could not save scores to flash");
   bleSetInfo(makeInfo());
+  if (!approval.approved()) return;
   const RecordMessage message = toRecordMessage(entry);
   bleSendMessage(&message, sizeof(message));
 }
@@ -131,12 +200,63 @@ void sendRecordsAfter(uint32_t afterRecordId) {
   bleSendMessage(&done, sizeof(done));
 }
 
+// ---- Connecting: the child says yes on the toy -------------------------------
+
+void sendApproval(uint8_t status) {
+  ApprovalMessage message = {};
+  message.type = MessageType::kApproval;
+  message.status = status;
+  bleSendMessage(&message, sizeof(message));
+}
+
+void applyApproval(ConnectionApproval::Action action, uint32_t nowMs) {
+  switch (action) {
+    case ConnectionApproval::Action::kNone:
+      return;
+    case ConnectionApproval::Action::kSendWaiting:
+      Serial.print("Asking about ");
+      Serial.println(approval.phoneName());
+      sendApproval(ApprovalStatus::kWaiting);
+      celebration.cancel();
+      static constexpr uint8_t kAttention[] = {7};  // a soft bump: "look at me"
+      hapticsPlay(kAttention, 1);
+      break;
+    case ConnectionApproval::Action::kSendAccepted:
+      Serial.println("Phone approved");
+      sendApproval(ApprovalStatus::kAccepted);
+      storageSaveApprovedApps(approvedApps);
+      pressedForNotify = 0;
+      break;
+    case ConnectionApproval::Action::kSendDeclinedAndDisconnect:
+      Serial.println("Phone declined");
+      sendApproval(ApprovalStatus::kDeclined);
+      disconnectPending = true;
+      disconnectAtMs = nowMs + kDeclineDisconnectDelayMs;
+      break;
+  }
+  redraw = true;
+}
+
+// While the question is on screen, the menu keys (or the clicker) answer it.
+void answerPrompt(uint32_t nowMs) {
+  const uint16_t pressed = pressedForGame;
+  pressedForGame = 0;  // nothing reaches the game while the question is up
+  if (inputsHaveMenuKeys()) {
+    if (pressed & (1u << SwitchBit::kNavLeft)) applyApproval(approval.answer(false, approvedApps), nowMs);
+    else if (pressed & (1u << SwitchBit::kNavRight)) applyApproval(approval.answer(true, approvedApps), nowMs);
+  } else if (pressed & (1u << SwitchBit::kClicker)) {
+    applyApproval(approval.answer(true, approvedApps), nowMs);
+  }
+}
+
 // ---- Modes and commands -----------------------------------------------------
 
 void enterAppMode(uint32_t nowMs) {
   if (game.isRunning()) {
     game.cancel(nowMs);
     recordFinishedGame();
+  } else {
+    game.cancel(nowMs);  // disarm a game still waiting for its first move
   }
   fidgetMode = FidgetMode::kApp;
   appDisplay = AppDisplay{};
@@ -145,7 +265,7 @@ void enterAppMode(uint32_t nowMs) {
 
 void enterStandaloneMode(uint32_t nowMs) {
   fidgetMode = FidgetMode::kStandalone;
-  goTo(Screen::PressToPlay, nowMs);
+  armGame(nowMs);
 }
 
 void sendError(uint8_t code, uint8_t opcode) {
@@ -158,6 +278,14 @@ void handleCommand(const CommandBytes& bytes, uint32_t nowMs) {
   const uint8_t error = parseCommand(bytes.data, bytes.length, command);
   if (error != ErrorCode::kNone) {
     sendError(error, bytes.length > 0 ? bytes.data[0] : 0);
+    return;
+  }
+  if (command.opcode == CommandOpcode::kHello) {
+    applyApproval(approval.onHello(command.appId, command.name, nowMs, approvedApps), nowMs);
+    return;
+  }
+  if (!approval.approved()) {
+    sendError(ErrorCode::kNotApproved, command.opcode);
     return;
   }
   // The toy owns its screen in standalone mode; display commands only apply in app mode.
@@ -175,6 +303,11 @@ void handleCommand(const CommandBytes& bytes, uint32_t nowMs) {
       break;
     case CommandOpcode::kHaptic:
       hapticsPlay(command.effects, command.effectCount);
+      break;
+    case CommandOpcode::kScoreEvent:
+      // An app game's moment: same animation and haptic as the toy's own games.
+      celebrate(command.kind, command.score, command.value, nowMs,
+                command.kind == ScoreEventKind::kGameEnd && command.score > command.value);
       break;
     case CommandOpcode::kShowText:
       if (!appOwnsScreen) break;
@@ -226,24 +359,28 @@ void readInputs(uint32_t nowMs) {
   pressedForGame |= newlyPressed;
   if (raw.spinnerValid) spinner.update(raw.spinnerRaw);
 
+  const bool awaitingApproval = approval.state() == ConnectionApproval::State::kWaitingForHello || approval.asking();
   current.mode = fidgetMode;
   current.switches = debouncer.stable();
   current.spinnerTotal = spinner.total();
   current.screwTotal = static_cast<int16_t>(raw.screwDetents);
-  current.squeezeRaw = raw.squeezeRaw;
+  current.reserved = 0;
   current.timeMs = static_cast<uint16_t>(nowMs);
-  current.batteryPercent = kBatteryUnknown;  // TODO: read VBAT once the cell is fitted
-  current.flags = (clockSet ? InputFlag::kClockSet : 0) | (game.isRunning() ? InputFlag::kStandaloneGame : 0);
+  current.batteryPercent = batteryPercent();
+  current.flags = (clockSet ? InputFlag::kClockSet : 0) | (batteryCharging() ? InputFlag::kCharging : 0) |
+                  (game.isRunning() ? InputFlag::kStandaloneGame : 0) |
+                  (awaitingApproval ? InputFlag::kAwaitingApproval : 0);
 }
 
 bool inputChangedSinceLastSend() {
   return current.mode != lastSent.mode || current.switches != lastSent.switches ||
          current.spinnerTotal != lastSent.spinnerTotal || current.screwTotal != lastSent.screwTotal ||
-         current.squeezeRaw != lastSent.squeezeRaw || current.flags != lastSent.flags ||
-         current.batteryPercent != lastSent.batteryPercent || pressedForNotify != 0;
+         current.flags != lastSent.flags || current.batteryPercent != lastSent.batteryPercent ||
+         pressedForNotify != 0;
 }
 
-// Sends an input packet on change (at most every 20 ms) and at least once a second.
+// Sends an input packet on change (at most every 20 ms) and at least once a
+// second. Only an approved phone gets notifications.
 void publishInput(uint32_t nowMs) {
   const uint32_t sinceLast = nowMs - lastNotifyMs;
   const bool due = sentOnce ? (inputChangedSinceLastSend() && sinceLast >= kMinNotifyGapMs) || sinceLast >= kHeartbeatMs
@@ -252,13 +389,29 @@ void publishInput(uint32_t nowMs) {
   current.seq = sentOnce ? static_cast<uint8_t>(lastSent.seq + 1) : 0;
   current.pressed = pressedForNotify;
   pressedForNotify = 0;
-  bleSetInput(current);
+  bleSetInput(current, approval.approved());
   lastSent = current;
   sentOnce = true;
   lastNotifyMs = nowMs;
 }
 
 // ---- Standalone play --------------------------------------------------------
+
+// Holding both menu keys for 5 s on Ready forgets every approved phone.
+bool checkForgetPhones(uint32_t nowMs) {
+  if ((debouncer.stable() & kNavBits) != kNavBits) {
+    bothMenuKeysSinceMs = 0;
+    return false;
+  }
+  if (bothMenuKeysSinceMs == 0) bothMenuKeysSinceMs = nowMs;
+  if (nowMs - bothMenuKeysSinceMs < kForgetPhonesHoldMs) return false;
+  bothMenuKeysSinceMs = 0;
+  approvedApps.clear();
+  storageSaveApprovedApps(approvedApps);
+  noticeText = "FORGOT ALL\nPHONES";
+  goTo(Screen::Notice, nowMs);
+  return true;
+}
 
 void updateStandalone(uint32_t nowMs) {
   const bool pressed = pressedForGame != 0;
@@ -269,22 +422,30 @@ void updateStandalone(uint32_t nowMs) {
       if (elapsed >= kWelcomeMs || pressed) goTo(Screen::Instructions, nowMs);  // a press skips ahead
       break;
     case Screen::Instructions:
-      if (elapsed >= kInstructionsMs || pressed) goTo(Screen::Countdown, nowMs);
+      if (elapsed >= kInstructionsMs || pressed) armGame(nowMs);
       break;
-    case Screen::Countdown: {
-      if (elapsed >= kCountdownFrom * kCountdownStepMs) {
-        startGame(nowMs);
+    case Screen::Ready: {
+      if (checkForgetPhones(nowMs)) break;
+      const uint16_t nav = pressedForGame & kMenuBits;
+      if (nav) {
+        const bool left = (nav & (1u << SwitchBit::kNavLeft)) != 0;
+        selectedGame = (selectedGame + (left ? kToyGameCount - 1 : 1)) % kToyGameCount;
+        armGame(nowMs);
         break;
       }
-      const uint8_t number = static_cast<uint8_t>(kCountdownFrom - elapsed / kCountdownStepMs);
-      if (number != countdownShown) {
-        countdownShown = number;
-        redraw = true;
+      InputPacket forGame = current;
+      forGame.pressed = pressedForGame & static_cast<uint16_t>(~kMenuBits);
+      game.update(forGame, nowMs);
+      if (game.isRunning()) {
+        Serial.print(gameTitle(game.modeId()));
+        Serial.println(" started");
+        emitScoreEvent(scoreEvents.start(scoreLog.best(game.modeId())), nowMs);
+        emitScoreChanges(nowMs);  // the first move scores
+        goTo(Screen::Playing, nowMs);
       }
       break;
     }
-    case Screen::Playing:
-    case Screen::Achievement: {
+    case Screen::Playing: {
       InputPacket forGame = current;
       forGame.pressed = pressedForGame;
       const uint32_t before = game.score();
@@ -292,29 +453,28 @@ void updateStandalone(uint32_t nowMs) {
       if (game.score() != before) {
         Serial.print("Points: ");
         Serial.println(game.score());
-        if (screen == Screen::Playing) redraw = true;
+        emitScoreChanges(nowMs);
+        redraw = true;
       }
       if (game.isFinished()) {
         recordFinishedGame();
-        if (resultNewBest) hapticsPlay(kCelebrateEffects, sizeof(kCelebrateEffects));
-        goTo(resultScore > 0 ? Screen::Result : Screen::PressToPlay, nowMs);  // no "0 points" screen
+        emitScoreEvent(scoreEvents.end(), nowMs, resultNewBest);
+        if (resultScore > 0) goTo(Screen::Result, nowMs);
+        else armGame(nowMs);  // no "0 points" screen
         break;
       }
-      const uint32_t reached = game.score() / kPointsPerAchievement;
-      if (reached > achievementsShown) {
-        achievementsShown = reached;
-        hapticsPlay(kCelebrateEffects, sizeof(kCelebrateEffects));
-        goTo(Screen::Achievement, nowMs);
-      } else if (screen == Screen::Achievement && elapsed >= kAchievementMs) {
-        goTo(Screen::Playing, nowMs);
+      const uint32_t secondsLeft = (game.remainingMs(nowMs) + 999) / 1000;
+      if (secondsLeft != secondsLeftShown) {
+        secondsLeftShown = secondsLeft;
+        redraw = true;
       }
       break;
     }
     case Screen::Result:
-      if (elapsed >= kResultMs) goTo(Screen::PressToPlay, nowMs);
+      if (elapsed >= kResultMs) armGame(nowMs);
       break;
-    case Screen::PressToPlay:
-      if (pressed) goTo(Screen::Countdown, nowMs);
+    case Screen::Notice:
+      if (elapsed >= kNoticeMs) armGame(nowMs);
       break;
     case Screen::App:
       break;
@@ -322,19 +482,55 @@ void updateStandalone(uint32_t nowMs) {
   pressedForGame = 0;
 }
 
-void render() {
-  if (!redraw) return;
-  redraw = false;
+// ---- Drawing ----------------------------------------------------------------
+
+void drawScreen() {
   switch (screen) {
     case Screen::Welcome: uiWelcome(); break;
     case Screen::Instructions: uiInstructions(); break;
-    case Screen::Countdown: uiCountdown(countdownShown > 0 ? countdownShown : kCountdownFrom); break;
-    case Screen::Playing: uiPoints(game.score(), linked); break;
-    case Screen::Achievement: uiAchievement(game.score()); break;
+    case Screen::Ready: uiReady(gameTitle(kToyGames[selectedGame]), kToyGameCount > 1, linked); break;
+    case Screen::Playing:
+      uiPoints(game.score(), linked, game.modeId() == BasicModeId::kSpinCount ? static_cast<int32_t>(secondsLeftShown) : -1);
+      break;
     case Screen::Result: uiResult(resultScore, resultNewBest); break;
-    case Screen::PressToPlay: uiPressToPlay(linked); break;
+    case Screen::Notice: uiNotice(noticeText); break;
     case Screen::App: uiApp(appDisplay); break;
   }
+}
+
+void render(uint32_t nowMs) {
+  // The "connect?" question beats everything else on screen.
+  if (approval.asking()) {
+    const uint32_t secondsLeft = approval.secondsLeftToAnswer(nowMs);
+    if (!redraw && secondsLeft == promptSecondsShown) return;
+    redraw = false;
+    promptSecondsShown = secondsLeft;
+    uiApprovalPrompt(approval.phoneName(), secondsLeft, inputsHaveMenuKeys());
+    uiFlush();
+    return;
+  }
+  if (celebration.active(nowMs)) {
+    if (nowMs - lastFrameMs < kAnimationFrameMs && lastFrameMs != 0) return;
+    lastFrameMs = nowMs;
+    wasAnimating = true;
+    const uint32_t elapsed = celebration.elapsedMs(nowMs);
+    if (celebration.fullScreen()) {
+      uiCelebration(celebration.kind(), celebration.score(), celebration.value(), elapsed);
+    } else {
+      drawScreen();
+      uiPointsPop(celebration.value(), elapsed);
+    }
+    uiFlush();
+    return;
+  }
+  if (wasAnimating) {
+    wasAnimating = false;
+    redraw = true;
+  }
+  if (!redraw) return;
+  redraw = false;
+  drawScreen();
+  uiFlush();
 }
 
 }  // namespace
@@ -346,8 +542,10 @@ void setup() {
   inputsBegin();
   if (!uiBegin()) Serial.println("OLED initialization failed!");
   hapticsBegin();
+  batteryBegin();
   storageBegin();
   storageLoad(scoreLog);
+  storageLoadApprovedApps(approvedApps);
 
   const uint32_t now = millis();
   readInputs(now);  // debounce baseline
@@ -361,31 +559,43 @@ void loop() {
   bool connected = false;
   bool disconnected = false;
   bleTakeLinkEvents(connected, disconnected);
-  if (connected) {
-    Serial.println("App connected");
-    pressedForNotify = 0;
-  }
   if (disconnected) {
-    Serial.println("App disconnected");
+    Serial.println("Phone disconnected");
+    approval.onDisconnect();
+    disconnectPending = false;
+    redraw = true;
     if (fidgetMode == FidgetMode::kApp) enterStandaloneMode(now);  // never leave a frozen screen
+  }
+  if (connected) {
+    Serial.println("Phone connected");
+    approval.onConnect(now);
+    pressedForNotify = 0;
   }
   if (bleConnected() != linked) {
     linked = !linked;
     redraw = true;
+  }
+  applyApproval(approval.update(now), now);
+  if (disconnectPending && static_cast<int32_t>(now - disconnectAtMs) >= 0) {
+    disconnectPending = false;
+    bleDisconnect();
   }
 
   CommandBytes command;
   while (bleTakeCommand(command)) handleCommand(command, now);
   if (bleTakeDroppedCommand()) sendError(ErrorCode::kBusy, 0);
 
+  batteryUpdate(now);
   readInputs(now);
-  if (fidgetMode == FidgetMode::kStandalone) {
+  if (approval.asking()) {
+    answerPrompt(now);
+  } else if (fidgetMode == FidgetMode::kStandalone) {
     updateStandalone(now);
   } else {
     pressedForGame = 0;
   }
   publishInput(now);
-  render();
+  render(now);
 
   delay(2);  // lets the BLE and USB tasks run; inputs are still sampled every few ms
 }

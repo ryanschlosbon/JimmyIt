@@ -7,7 +7,7 @@ export class GameDefinitionError extends Error {
 }
 
 /** Checks a game definition once, at import time, and returns it unchanged. */
-export function defineGame<TState>(game: GameDefinition<TState>): GameDefinition<TState> {
+export function defineGame<TState, TAction = never>(game: GameDefinition<TState, TAction>): GameDefinition<TState, TAction> {
   const fail = (why: string): never => {
     throw new GameDefinitionError(`game "${game.id}": ${why}`);
   };

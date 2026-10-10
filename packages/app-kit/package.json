@@ -1,0 +1,20 @@
+{
+  "name": "@jimmyit/app-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The app's logic without UI: toy connection, score sync, running games, rewards and scoreboards, plus React hooks.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/core": "*",
+    "@jimmyit/game-sdk": "*"
+  },
+  "devDependencies": {
+    "@jimmyit/fake-fidget": "*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

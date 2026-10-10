@@ -2,6 +2,7 @@
 
 export {
   type SwitchId,
+  type ScoreEventKindName,
   type FidgetModeName,
   type CapabilityName,
   SWITCH_IDS,
@@ -33,13 +34,13 @@ export {
   isSwitchUp,
 } from './input/types';
 export {
-  type InputConfig,
-  type InputStats,
-  type InputTracker,
-  DEFAULT_INPUT_CONFIG,
-  createInputTracker,
-  squeezeLevelFromRaw,
-} from './input/input-tracker';
+  type ToyAction,
+  type ToyActionOptions,
+  type ToyActionTracker,
+  TOY_ACTIONS,
+  createToyActionTracker,
+} from './input/toy-actions';
+export { type InputStats, type InputTracker, createInputTracker } from './input/input-tracker';
 
 export type { ScoreRecord, ScoreSource, Stars } from './scoring/types';
 export { type ScoreCounter, type ScoreSnapshot, createScoreCounter } from './scoring/score-counter';
@@ -59,6 +60,14 @@ export {
   formatDeviceId,
 } from './scoring/score-records';
 export { type BasicModeInfo, BASIC_MODES, basicModeById, gameIdForBasicMode } from './scoring/basic-modes';
+export {
+  type ScoreEvent,
+  type ScoreEventDraft,
+  type ScoreEventTracker,
+  createScoreEventTracker,
+  scoreEventKindFromWire,
+  isNewBestAtEnd,
+} from './scoring/score-events';
 
 export { type KeyValueStore, createMemoryKeyValueStore } from './storage/key-value-store';
 export {
@@ -84,6 +93,8 @@ export {
   ProtocolVersionMismatchError,
   FidgetDisconnectedError,
   FidgetTimeoutError,
+  FidgetDeclinedError,
+  createAppId,
   connectFidgetClient,
 } from './device/fidget-client';
 

@@ -1,7 +1,7 @@
 # games/AGENTS.md
 
-Rules for minigames, on top of the root `AGENTS.md`. `squeeze-hold/` is the
-reference example; copy its shape.
+Rules for minigames, on top of the root `AGENTS.md`. `timed-practice/` (a toy
+game) and `drawing/` (a screen game) are the reference examples; copy their shape.
 
 ## Layout of one game
 
@@ -28,15 +28,23 @@ games/<game-id>/
 
 - `create(session)` returns `{ getState, onStart?, onEvent?, onTick?, onFinish? }`.
   Keep all game state inside that closure.
-- React to discrete input in `onEvent` (`switchDown`, `spin`, `screw`,
-  `squeezeStart`…). Read continuous input (squeeze level, spinner angle)
-  from `session.getInput()` in `onTick`.
+- React to discrete input in `onEvent` (`switchDown`, `switchUp`, `spin`,
+  `screw`). Read continuous input (spinner angle, held switches) from
+  `session.getInput()` in `onTick`.
+- To count "moves", use `createToyActionTracker()` rather than your own rules,
+  so a move means the same in every game and on the toy.
+- Screen-only games (drawing) set `needsToy: false`; they run with no toy
+  connected. Views send input to the rules with `run.submit(action)`, handled
+  in `onAction` (see `drawing/`).
 - Use `onTick(elapsedMs)` for anything time-based. Never call `setTimeout`,
   `setInterval` or `Date.now()`.
 - Score only with `session.score.add()`. Count interactions with
   `countAction()`. Record game-specific numbers with
   `setMetric` / `maxMetric` (camelCase plus unit: `longestHoldMs`).
 - Feedback only with `session.feedback('tap' | 'tick' | 'success' | 'celebrate' | 'nudge')`.
+- Don't celebrate milestones or new high scores yourself: the runner watches
+  `session.score` and fires those moments (with the toy's animation and haptic)
+  for every game.
 - Set `durationMs` for fixed-length games, or `null` and call
   `session.finish()`. The runner saves the score, shows it on the toy and
   plays the end-of-game haptic. Don't do those yourself.
@@ -61,17 +69,18 @@ games/<game-id>/
 import { createGameTestHarness } from '@jimmyit/game-sdk/testing';
 
 const h = await createGameTestHarness(myGame);
-h.fidget.squeeze(0.5);  // or press / tap / spin / turnScrew
+h.fidget.spin(90);      // or press / release / tap / turnScrew
 h.advance(5_000);       // game time, deterministic
-expect(h.run.getScore().score).toBe(50);
+expect(h.run.getScore().score).toBe(5);
 const record = await h.playToEnd();
 ```
 
 Cover at least: points for the intended action, no points for doing nothing,
 the end condition, and the saved `ScoreRecord` (score, stars, metrics).
+Screen-only games: `createGameTestHarness(game, { toy: false })`.
 
 ## Registering a game
 
-The list of games shown in the app lives in `apps/mobile` (frontend's area).
-Your PR adds one import and one list entry there and requests frontend
+The list of games shown in the app is `apps/mobile/src/games.ts` (frontend's
+area). Your PR adds one import and one entry there and requests frontend
 review. Nothing else in `apps/` changes.

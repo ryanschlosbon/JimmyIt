@@ -37,6 +37,6 @@ export interface BleManagerLike {
     listener: (error: Error | null, device: BleDeviceLike | null) => void,
   ): unknown;
   stopDeviceScan(): unknown;
-  connectToDevice(deviceId: string): Promise<BleDeviceLike>;
+  connectToDevice(deviceId: string, options?: { timeout?: number }): Promise<BleDeviceLike>;
   onDeviceDisconnected(deviceId: string, listener: (error: Error | null, device: BleDeviceLike | null) => void): BleSubscription;
 }

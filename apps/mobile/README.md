@@ -38,46 +38,61 @@ permissions or connects to real hardware. Expo Go can preview this UI; integrati
   Each completed drawing earns 50 points; an empty attempt receives 10 points of partial credit.
   Drawing Pro takes ten drawings, Shape Star takes one shape attempt, and Week Streak tracks
   the longest run of consecutive local calendar days. Button Buddy and Super Spinner
-  grow from the actual action counts in timed demo sessions. The app never invents sample score records.
-- **Timed practice:** 30-, 60-, or 90-second practice sessions with frontend demo controls
-  for button presses, dial spins, and squeezes. Five points per action, with ten points
+  grow from real toy moves in timed practice (and spins from Spin Count on the toy). Games played on the
+  toy without the app sync in and count too. The app never invents sample score records.
+- **Timed practice:** 30-, 60-, or 90-second practice sessions that count every move on
+  the toy (the demo buttons press the virtual toy). Five points per move, with ten points
   of partial credit for an empty attempt. Pause, resume, and finish early without penalties.
   Leaving the screen or switching apps pauses the session. Completed sessions use stable
   IDs and the shared score repository, including retry after a storage error.
-- **Settings:** find / cancel / disconnect / reconnect simulation, sample 84% battery,
+- **Settings:** find / cancel / disconnect / reconnect, the toy's real name and battery,
   cancellable calibration, and persistent light / dark mode. Connection starts disconnected
   after a reload. Calibration never changes real hardware values.
 
-Scores are created with `createAppScoreRecord` and saved only through the shared
-`ScoreRepository`, backed by AsyncStorage. Stable drawing IDs make retries idempotent.
+Scores are created by the shared game runner (`useGameRun`) and saved only through
+the shared `ScoreRepository`, backed by AsyncStorage. Each run saves one record, so
+retrying a failed save can never double-count.
 Unsupported saved score schemas are preserved and reported, never overwritten.
 Appearance is saved separately as `jimmy.appearance`. All data stays on the device;
 fonts are bundled and there are no analytics or remote services.
 
-Development builds connect the UI demo through `@jimmyit/fake-fidget` and
-`connectFidgetClient`. Production previews use UI-only simulation. Actual BLE,
-toy-score synchronization, and SDK game views are future integration work.
+All app logic comes from `@jimmyit/app-kit` hooks and the `@jimmyit/game-*`
+packages (see `packages/app-kit/README.md`); screens only render, so a redesign
+replaces screens without touching scoring, saving or the toy connection.
+
+Where the toy comes from (`src/toy-connector.ts`):
+
+| Build | Toy |
+| --- | --- |
+| Web preview | Virtual toy (tap **Toy** in the corner) |
+| Development build | Virtual toy, or the real toy with `EXPO_PUBLIC_JIMMY_TOY=bluetooth npm run android --workspace @jimmyit/mobile` |
+| Release build | Real toy over Bluetooth (`react-native-ble-plx`, needs a development or release build, not Expo Go) |
+
+Connecting asks the child on the toy first ("Say yes on Jimmy ▶" in the
+header). Big score moments (every 100 points, a new high score), from app
+games or the toy's own games, show `src/components/CelebrationOverlay.tsx`,
+which is a placeholder look driven by app-kit's `useCelebration()`.
 
 ## Files
 
 ```text
 index.ts                    registered Expo entry point (named App export)
-src/App.tsx                 app shell, navigation, drafts, completion dialog
+src/App.tsx                 app shell, services provider, navigation, drafts, completion dialog
 src/screens/                Intro, Home, Drawing, Timed practice, Rewards, Settings
 src/components/             controls, vector Jimmy, icons, vector drawing canvas
-src/use-jimmy.ts             appearance, score loading, simulated connection lifecycle
-src/progress.ts              score persistence and derived rewards
-src/drawing.ts               immutable vector strokes and undo
-src/timed-challenge.ts       injected timer, pause/resume, action counts, completion
+src/use-jimmy.ts            screen-facing state over app-kit hooks: wording, appearance, calibration demo
+src/games.ts                game registry: which games the app offers
+src/toy-connector.ts        virtual toy in development / web previews; Bluetooth later
+src/badge-visuals.ts        icon and color for each badge id
 src/artwork.ts               editable image slots and intro background colors
 assets/                      supplied intro compositions and your replacement artwork
 src/theme.ts                 light / dark tokens
 ```
 
-Only `apps/mobile`, root workspace registration, and the lockfile are changed.
-Shared modules, contracts, firmware, and ownership rules are untouched. Set the
-frontend owner's GitHub username in CODEOWNERS when the team identifies that owner;
-the existing owner is retained rather than guessing a username.
+Scoring rules, drawing strokes, timed practice and rewards moved out of this
+folder into `games/drawing`, `games/timed-practice` and `packages/app-kit`
+(with their tests). Set the frontend owner's GitHub username in CODEOWNERS when
+the team identifies that owner.
 
 ## Validation
 

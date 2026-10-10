@@ -1,4 +1,5 @@
 import {
+  ApprovalStatus,
   BATTERY_UNKNOWN,
   Capability,
   type Command,
@@ -14,12 +15,23 @@ import {
   PROTOCOL_VERSION,
   ProtocolError,
   RecordFlag,
-  SHARED_DEFAULTS,
+  ScoreEventKind,
+  type ScoreEventKindName,
   SPINNER_COUNTS_PER_TURN,
   SwitchBit,
   type SwitchId,
 } from '@jimmyit/protocol';
-import { type Clock, createEmitter, type FidgetTransport, systemClock } from '@jimmyit/core';
+import {
+  type Clock,
+  createEmitter,
+  createScoreEventTracker,
+  type FidgetTransport,
+  type Listener,
+  type ScoreEventDraft,
+  scoreEventKindFromWire,
+  systemClock,
+  type Unsubscribe,
+} from '@jimmyit/core';
 
 export interface FakeRecordInput {
   readonly modeId: number;
@@ -27,6 +39,20 @@ export interface FakeRecordInput {
   readonly durationS: number;
   readonly actions?: number;
   readonly completed?: boolean;
+}
+
+/** The last score moment the toy celebrated (from the app, or its own game). */
+export interface FakeCelebration {
+  readonly kind: ScoreEventKindName;
+  readonly score: number;
+  readonly value: number;
+  readonly source: 'app' | 'toy';
+  readonly atMs: number;
+}
+
+export interface FakeApprovalRequest {
+  readonly appId: number;
+  readonly name: string;
 }
 
 export interface FakeDisplay {
@@ -52,11 +78,16 @@ export interface FakeFidget {
   spin(degrees: number): void;
   /** Positive = tighten. */
   turnScrew(detents: number): void;
-  /** 0 = released, 1 = full squeeze. */
-  squeeze(level: number): void;
   setBattery(percent: number | null, charging?: boolean): void;
-  /** Simulates a standalone game finishing on the toy. */
+  /** Simulates a standalone game finishing on the toy (record only). */
   finishStandaloneGame(input: FakeRecordInput): number;
+  /**
+   * Simulates the child playing a whole standalone game on the toy: +10 per
+   * move, with live score events to a connected app, then the record.
+   */
+  playStandaloneGame(input: { readonly modeId: number; readonly moves: number; readonly durationS: number }): number;
+  /** The child's answer to "CONNECT TO …?" (same as pressing the right / left menu key). */
+  answerApproval(yes: boolean): void;
   /** Simulates the BLE link dropping. The fidget falls back to standalone mode. */
   dropConnection(error?: Error): void;
   /** Brings the link back so a new client can connect. */
@@ -70,6 +101,23 @@ export interface FakeFidget {
   readonly bests: ReadonlyMap<number, number>;
   readonly ackedRecordId: number;
   readonly clockUnixSeconds: number | null;
+  /** Score events the app asked the toy to celebrate. */
+  readonly scoreEvents: readonly FakeCelebration[];
+  readonly lastCelebration: FakeCelebration | null;
+
+  // The toy's own state, for simulator panels.
+  /** A phone waiting for the child's yes/no, or null. */
+  readonly approvalRequest: FakeApprovalRequest | null;
+  /** True once the connected phone has been approved. */
+  readonly approved: boolean;
+  /** True while a client may connect; false after dropConnection(). */
+  readonly linked: boolean;
+  isClosed(switchId: SwitchId): boolean;
+  readonly batteryPercent: number | null;
+  /** Standalone games stored on the toy (synced or not). */
+  readonly storedRecordCount: number;
+  /** Called after any change above: input, display, haptics, mode, link or records. */
+  subscribe(listener: Listener<void>): Unsubscribe;
 }
 
 export interface FakeFidgetOptions {
@@ -77,6 +125,12 @@ export interface FakeFidgetOptions {
   readonly clock?: Clock;
   readonly firmwareVersion?: readonly [number, number, number];
   readonly protocolVersion?: number;
+  /**
+   * 'auto' (default, for tests): every phone is approved at once. 'ask': like the
+   * real toy, a new phone waits until answerApproval() or a menu key; approved
+   * phones are remembered for later connections.
+   */
+  readonly approval?: 'auto' | 'ask';
 }
 
 export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
@@ -88,13 +142,13 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
   const inputListeners = createEmitter<Uint8Array>();
   const messageListeners = createEmitter<Uint8Array>();
   const disconnectListeners = createEmitter<Error | null>();
+  const changes = createEmitter<void>();
   let linkUp = true;
 
   let seq = 0;
-  let switches = 0;
+  let switches = 1 << SwitchBit.stylusStowed; // like the real toy: the stylus starts in its bay
   let spinnerTotal = 0;
   let screwTotal = 0;
-  let squeezeRaw = 0;
   let batteryPercent = 80;
   let charging = false;
   let mode: number = FidgetMode.standalone;
@@ -107,12 +161,21 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
   const bests = new Map<number, number>();
   const haptics: number[][] = [];
   const commands: Command[] = [];
+  const approvalMode = options.approval ?? 'auto';
+  const knownApps = new Set<number>();
+  let approvalRequest: FakeApprovalRequest | null = null;
+  let approved = false;
+  const scoreEvents: FakeCelebration[] = [];
+  let lastCelebration: FakeCelebration | null = null;
   let lines = ['', '', '', ''];
   let score: FakeDisplay['score'] = null;
   let progress: FakeDisplay['progress'] = null;
 
   function packet(pressed: number): Uint8Array {
-    const flags = (clockBase ? InputFlag.clockSet : 0) | (charging ? InputFlag.charging : 0);
+    const flags =
+      (clockBase ? InputFlag.clockSet : 0) |
+      (charging ? InputFlag.charging : 0) |
+      (approvalRequest ? InputFlag.awaitingApproval : 0);
     return encodeInputPacket({
       seq,
       mode,
@@ -120,7 +183,7 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
       pressed,
       spinnerTotal,
       screwTotal: ((screwTotal << 16) >> 16),
-      squeezeRaw,
+      reserved: 0,
       timeMs: clock.now() & 0xffff,
       batteryPercent,
       flags,
@@ -129,7 +192,8 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
 
   function notifyInput(pressed = 0): void {
     seq = (seq + 1) & 0xff;
-    if (linkUp) inputListeners.emit(packet(pressed));
+    if (linkUp && approved) inputListeners.emit(packet(pressed));  // only an approved phone gets input
+    changes.emit();
   }
 
   function sendMessage(bytes: Uint8Array): void {
@@ -158,6 +222,14 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
       return;
     }
     commands.push(command);
+    if (command.type === 'hello') {
+      handleHello(command.appId, command.name);
+      return;
+    }
+    if (!approved) {
+      sendMessage(encodeMessage({ type: 'error', code: ErrorCode.notApproved, opcode: CommandOpcode[command.type] }));
+      return;
+    }
     const appOwnsDisplay = mode === FidgetMode.app;
     switch (command.type) {
       case 'setTime':
@@ -198,6 +270,52 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
       case 'setBest':
         bests.set(command.modeId, Math.max(bests.get(command.modeId) ?? 0, command.score));
         break;
+      case 'scoreEvent': {
+        const kind = scoreEventKindFromWire(command.kind);
+        if (!kind) break;
+        lastCelebration = { kind, score: command.score, value: command.value, source: 'app', atMs: clock.now() };
+        scoreEvents.push(lastCelebration);
+        break;
+      }
+    }
+  }
+
+  function sendApproval(status: number): void {
+    sendMessage(encodeMessage({ type: 'approval', status }));
+  }
+
+  function handleHello(appId: number, name: string): void {
+    if (approved || approvalMode === 'auto' || knownApps.has(appId)) {
+      approved = true;
+      knownApps.add(appId);
+      sendApproval(ApprovalStatus.accepted);
+      return;
+    }
+    approvalRequest = { appId, name: name || 'A PHONE' };
+    sendApproval(ApprovalStatus.waiting);
+  }
+
+  function answer(yes: boolean): void {
+    if (!approvalRequest) return;
+    const request = approvalRequest;
+    approvalRequest = null;
+    if (yes) {
+      approved = true;
+      knownApps.add(request.appId);
+      sendApproval(ApprovalStatus.accepted);
+      changes.emit();
+      return;
+    }
+    sendApproval(ApprovalStatus.declined);
+    changes.emit();
+    fake.dropConnection();  // the real toy disconnects after saying no
+  }
+
+  // The toy's own game moments: celebrate on the toy and tell an approved app.
+  function toyEvent(event: ScoreEventDraft, modeId: number): void {
+    lastCelebration = { ...event, source: 'toy', atMs: clock.now() };
+    if (approved) {
+      sendMessage(encodeMessage({ type: 'scoreEvent', kind: ScoreEventKind[event.kind], modeId, score: event.score, value: event.value }));
     }
   }
 
@@ -216,7 +334,13 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
         firmwareMinor: fwMinor,
         firmwarePatch: fwPatch,
         deviceId,
-        capabilities: Capability.haptics | Capability.display | Capability.scoreLog | Capability.standaloneModes,
+        capabilities:
+          Capability.haptics |
+          Capability.display |
+          Capability.scoreLog |
+          Capability.standaloneModes |
+          Capability.scoreEvents |
+          Capability.approval,
         newestRecordId: nextRecordId - 1,
         storedRecordCount: records.length,
       });
@@ -224,6 +348,7 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
     async write(_characteristic, bytes) {
       if (!linkUp) throw new Error('fake fidget: link is down');
       handleCommand(bytes);
+      changes.emit();
     },
     subscribe(characteristic, listener) {
       return (characteristic === 'input' ? inputListeners : messageListeners).subscribe(listener);
@@ -239,6 +364,11 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
   const fake: FakeFidget = {
     transport,
     press(switchId) {
+      // While the toy asks "connect?", the menu keys answer it (left = no, right = yes).
+      if (approvalRequest && (switchId === 'navLeft' || switchId === 'navRight')) {
+        answer(switchId === 'navRight');
+        return;
+      }
       setSwitchBit(switchId, true);
       notifyInput(1 << SwitchBit[switchId]);
     },
@@ -255,11 +385,6 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
     },
     turnScrew(detents) {
       screwTotal += Math.round(detents);
-      notifyInput();
-    },
-    squeeze(level) {
-      const clamped = Math.min(1, Math.max(0, level));
-      squeezeRaw = Math.round(SHARED_DEFAULTS.squeezeRawMin + clamped * (SHARED_DEFAULTS.squeezeRawMax - SHARED_DEFAULTS.squeezeRawMin));
       notifyInput();
     },
     setBattery(percent, isCharging = false) {
@@ -283,20 +408,42 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
       };
       records.push(record);
       if (input.score > previousBest) bests.set(input.modeId, input.score);
-      sendMessage(recordMessage(record));
+      if (approved) sendMessage(recordMessage(record));
+      changes.emit();
       return record.recordId;
     },
+    playStandaloneGame(input) {
+      const tracker = createScoreEventTracker(bests.get(input.modeId) ?? 0);
+      toyEvent(tracker.start(), input.modeId);
+      for (let move = 1; move <= input.moves; move++) {
+        for (const event of tracker.onScore(move * 10)) toyEvent(event, input.modeId);
+      }
+      const end = tracker.end();
+      toyEvent(end, input.modeId);
+      return fake.finishStandaloneGame({
+        modeId: input.modeId,
+        score: end.score,
+        durationS: input.durationS,
+        actions: input.moves,
+      });
+    },
+    answerApproval: (yes) => answer(yes),
     dropConnection(error) {
       if (!linkUp) return;
       linkUp = false;
       mode = FidgetMode.standalone;
+      approved = false;
+      approvalRequest = null;
       disconnectListeners.emit(error ?? null);
       inputListeners.clear();
       messageListeners.clear();
       disconnectListeners.clear();
+      changes.emit();
     },
     reconnect() {
+      if (linkUp) return;
       linkUp = true;
+      changes.emit();
     },
 
     get mode() {
@@ -314,6 +461,27 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
     get clockUnixSeconds() {
       return clockBase ? nowUnix() : null;
     },
+    get linked() {
+      return linkUp;
+    },
+    get approvalRequest() {
+      return approvalRequest;
+    },
+    get approved() {
+      return approved;
+    },
+    scoreEvents,
+    get lastCelebration() {
+      return lastCelebration;
+    },
+    isClosed: (switchId) => (switches & (1 << SwitchBit[switchId])) !== 0,
+    get batteryPercent() {
+      return batteryPercent === BATTERY_UNKNOWN ? null : batteryPercent;
+    },
+    get storedRecordCount() {
+      return records.length;
+    },
+    subscribe: (listener) => changes.subscribe(listener),
   };
   return fake;
 }

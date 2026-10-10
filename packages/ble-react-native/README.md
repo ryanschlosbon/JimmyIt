@@ -4,28 +4,23 @@ Turns a `react-native-ble-plx` connection into a `FidgetTransport`. Owned by
 backend. Nothing outside the app shell should import it; screens and games talk
 to `FidgetClient` from `@jimmyit/core`.
 
-## App wiring (frontend does this once)
+## App wiring
+
+`createBluetoothConnector()` is the real-toy connector for app-kit. It asks for
+permissions, goes straight to the last toy it used (remembered in storage) or
+scans for one advertising the JimmyIt service, and connects:
 
 ```ts
 import { BleManager } from 'react-native-ble-plx';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { connectFidgetClient, createScoreRepository, startScoreSync } from '@jimmyit/core';
-import { connectToFidget, scanForFidgets } from '@jimmyit/ble-react-native';
+import { createBluetoothConnector } from '@jimmyit/ble-react-native';
 
-const manager = new BleManager();
-const repository = createScoreRepository(AsyncStorage);
-
-const stopScan = scanForFidgets(manager, async (found) => {
-  stopScan();
-  const transport = await connectToFidget(manager, found.id);
-  const client = await connectFidgetClient(transport);
-  await startScoreSync(client, repository);
-  // hand `client` to screens and games
-});
+const connector = createBluetoothConnector({ manager: new BleManager(), storage: AsyncStorage, requestPermissions });
+const services = createJimmyServices({ storage: AsyncStorage, connector });
 ```
 
-During development, swap the two BLE lines for
-`createFakeFidget().transport` from `@jimmyit/fake-fidget`.
+`apps/mobile/src/bluetooth.ts` does exactly this, with Android's permission
+prompt. The app uses it in release builds, or in a development build started
+with `EXPO_PUBLIC_JIMMY_TOY=bluetooth`.
 
 ## Android requirements
 
@@ -38,5 +33,7 @@ During development, swap the two BLE lines for
 ## Status
 
 The structural types in `ble-plx-types.ts` type-check against the real
-`BleManager` and `Device` from react-native-ble-plx 3.5.1. The adapter has not
-yet been run on a phone against real firmware.
+`BleManager` and `Device` from react-native-ble-plx 3.5.1 (now installed in the
+app). `bluetooth-connector.test.ts` runs the connector, the BLE transport and
+the client end to end against a simulated radio built on the fake toy. Not yet
+run on a phone against real firmware.

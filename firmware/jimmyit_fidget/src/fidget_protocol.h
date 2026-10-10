@@ -15,6 +15,8 @@ namespace jimmyit {
 constexpr uint8_t kProtocolVersion = 1;
 constexpr size_t kMaxPayloadBytes = 20;
 constexpr size_t kMaxTextLength = 18;
+constexpr size_t kMaxAppNameLength = 15;
+constexpr uint32_t kPointsPerMilestone = 100;
 constexpr size_t kMaxHapticEffects = 8;
 constexpr uint8_t kMaxHapticEffectId = 123;
 constexpr uint8_t kDisplayLineCount = 4;
@@ -43,15 +45,15 @@ extern const uint8_t kUuid128Info[16];
 // Bit indexes in InputPacket::switches / ::pressed.
 namespace SwitchBit {
 constexpr uint8_t kClicker = 0;
-constexpr uint8_t kNavUp = 1;
-constexpr uint8_t kNavDown = 2;
+constexpr uint8_t kNavLeft = 1;
+constexpr uint8_t kNavRight = 2;
 constexpr uint8_t kRocker = 3;
 constexpr uint8_t kScrewHome = 4;
 constexpr uint8_t kScrewOut = 5;
 constexpr uint8_t kSliderLow = 6;
 constexpr uint8_t kSliderHigh = 7;
 constexpr uint8_t kStylusStowed = 8;
-constexpr uint8_t kFlapButtoned = 9;
+// Bit 9 was the shirt-button flap (removed from the toy); reserved, always 0.
 }  // namespace SwitchBit
 
 namespace FidgetMode {
@@ -64,6 +66,7 @@ namespace InputFlag {
 constexpr uint8_t kClockSet = 0x01;
 constexpr uint8_t kCharging = 0x02;
 constexpr uint8_t kStandaloneGame = 0x04;
+constexpr uint8_t kAwaitingApproval = 0x08;
 }  // namespace InputFlag
 
 namespace RecordFlag {
@@ -77,16 +80,20 @@ constexpr uint16_t kHaptics = 0x01;
 constexpr uint16_t kDisplay = 0x02;
 constexpr uint16_t kScoreLog = 0x04;
 constexpr uint16_t kStandaloneModes = 0x08;
+constexpr uint16_t kScoreEvents = 0x10;
+constexpr uint16_t kApproval = 0x20;
 }  // namespace Capability
 
 namespace CommandOpcode {
 constexpr uint8_t kSetTime = 0x01;
 constexpr uint8_t kSetMode = 0x02;
+constexpr uint8_t kHello = 0x03;
 constexpr uint8_t kHaptic = 0x10;
 constexpr uint8_t kShowText = 0x20;
 constexpr uint8_t kShowScore = 0x21;
 constexpr uint8_t kShowProgress = 0x22;
 constexpr uint8_t kClearDisplay = 0x23;
+constexpr uint8_t kScoreEvent = 0x24;
 constexpr uint8_t kSyncRequest = 0x30;
 constexpr uint8_t kSyncAck = 0x31;
 constexpr uint8_t kSetBest = 0x32;
@@ -95,6 +102,8 @@ constexpr uint8_t kSetBest = 0x32;
 namespace MessageType {
 constexpr uint8_t kRecord = 0x01;
 constexpr uint8_t kSyncDone = 0x02;
+constexpr uint8_t kScoreEvent = 0x03;
+constexpr uint8_t kApproval = 0x04;
 constexpr uint8_t kError = 0x7f;
 }  // namespace MessageType
 
@@ -104,20 +113,29 @@ constexpr uint8_t kUnknownOpcode = 1;
 constexpr uint8_t kBadLength = 2;
 constexpr uint8_t kBadValue = 3;
 constexpr uint8_t kBusy = 4;
+constexpr uint8_t kNotApproved = 5;
 }  // namespace ErrorCode
+
+// PROTOCOL.md "Score events".
+namespace ScoreEventKind {
+constexpr uint8_t kGameStart = 1;
+constexpr uint8_t kPoints = 2;
+constexpr uint8_t kMilestone = 3;
+constexpr uint8_t kNewBest = 4;
+constexpr uint8_t kGameEnd = 5;
+}  // namespace ScoreEventKind
+
+namespace ApprovalStatus {
+constexpr uint8_t kDeclined = 0;
+constexpr uint8_t kAccepted = 1;
+constexpr uint8_t kWaiting = 2;
+}  // namespace ApprovalStatus
 
 namespace BasicModeId {
 constexpr uint8_t kNone = 0;
 constexpr uint8_t kFreePlay = 1;
 constexpr uint8_t kSpinCount = 2;
 }  // namespace BasicModeId
-
-// Placeholders until the FSR is measured; PROTOCOL.md "Shared defaults".
-constexpr uint16_t kSqueezeRawMin = 200;
-constexpr uint16_t kSqueezeRawMax = 3500;
-// squeezeOnLevel 0.30 and squeezeOffLevel 0.15 expressed as raw ADC values.
-constexpr uint16_t kSqueezeRawOn = kSqueezeRawMin + (kSqueezeRawMax - kSqueezeRawMin) * 30 / 100;
-constexpr uint16_t kSqueezeRawOff = kSqueezeRawMin + (kSqueezeRawMax - kSqueezeRawMin) * 15 / 100;
 
 struct __attribute__((packed)) InputPacket {
   uint8_t seq;
@@ -126,7 +144,7 @@ struct __attribute__((packed)) InputPacket {
   uint16_t pressed;
   int32_t spinnerTotal;
   int16_t screwTotal;
-  uint16_t squeezeRaw;
+  uint16_t reserved;  // always 0 (was the squeeze sensor)
   uint16_t timeMs;
   uint8_t batteryPercent;
   uint8_t flags;
@@ -164,6 +182,21 @@ struct __attribute__((packed)) SyncDoneMessage {
 };
 static_assert(sizeof(SyncDoneMessage) == 7, "SyncDoneMessage must be 7 bytes");
 
+struct __attribute__((packed)) ScoreEventMessage {
+  uint8_t type;  // MessageType::kScoreEvent
+  uint8_t kind;  // ScoreEventKind
+  uint8_t modeId;
+  uint32_t score;
+  uint32_t value;
+};
+static_assert(sizeof(ScoreEventMessage) == 11, "ScoreEventMessage must be 11 bytes");
+
+struct __attribute__((packed)) ApprovalMessage {
+  uint8_t type;  // MessageType::kApproval
+  uint8_t status;  // ApprovalStatus
+};
+static_assert(sizeof(ApprovalMessage) == 2, "ApprovalMessage must be 2 bytes");
+
 struct __attribute__((packed)) ErrorMessage {
   uint8_t type;  // MessageType::kError
   uint8_t code;
@@ -177,15 +210,19 @@ struct ParsedCommand {
   uint8_t opcode;
   uint32_t unixSeconds;               // setTime
   uint8_t mode;                       // setMode
+  uint32_t appId;                     // hello
+  char name[kMaxAppNameLength + 1];   // hello
   uint8_t effects[kMaxHapticEffects]; // haptic
   uint8_t effectCount;                // haptic
   uint8_t line;                       // showText
   char text[kMaxTextLength + 1];      // showText
-  uint32_t score;                     // showScore, setBest
+  uint32_t score;                     // showScore, setBest, scoreEvent
   uint32_t best;                      // showScore
   uint8_t stars;                      // showScore
   uint8_t percent;                    // showProgress
   char label[kMaxTextLength + 1];     // showProgress
+  uint8_t kind;                       // scoreEvent
+  uint32_t value;                     // scoreEvent (score shares the field above)
   uint32_t afterRecordId;             // syncRequest
   uint32_t upToRecordId;              // syncAck
   uint8_t modeId;                     // setBest

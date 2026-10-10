@@ -27,20 +27,20 @@ describe('score repository', () => {
     const repo = createScoreRepository(createMemoryKeyValueStore());
     expect(await repo.save(record('a', 'spin', 10, 1))).toBe(true);
     expect(await repo.save(record('a', 'spin', 10, 1))).toBe(false);
-    expect(await repo.saveMany([record('b', 'spin', 30, 3), record('c', 'squeeze', 5, 2), record('b', 'spin', 30, 3)])).toBe(2);
+    expect(await repo.saveMany([record('b', 'spin', 30, 3), record('c', 'drawing', 5, 2), record('b', 'spin', 30, 3)])).toBe(2);
     expect((await repo.list()).map((r) => r.id)).toEqual(['b', 'c', 'a']);
     expect((await repo.list({ gameId: 'spin', limit: 1 })).map((r) => r.id)).toEqual(['b']);
   });
 
   it('finds bests and summarizes', async () => {
     const repo = createScoreRepository(createMemoryKeyValueStore());
-    await repo.saveMany([record('a', 'spin', 30, 1), record('b', 'spin', 30, 2), record('c', 'squeeze', 5, 3)]);
+    await repo.saveMany([record('a', 'spin', 30, 1), record('b', 'spin', 30, 2), record('c', 'drawing', 5, 3)]);
     expect((await repo.best('spin'))?.id).toBe('a');
     expect(await repo.best('nothing')).toBeNull();
     const summary = await repo.summary();
     expect(summary).toMatchObject({ sessions: 3, totalScore: 65, totalPlayMs: 3000 });
     expect(summary.games.map((g) => [g.gameId, g.bestScore, g.sessions])).toEqual([
-      ['squeeze', 5, 1],
+      ['drawing', 5, 1],
       ['spin', 30, 2],
     ]);
   });
