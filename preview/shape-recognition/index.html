@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JimmyIt Shape Recognition Preview</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <span class="eyebrow">JIMMYIT · LOCAL PREVIEW</span>
+          <h1>Shape Recognition</h1>
+          <p>Draw with your mouse, finger, or stylus. Take your time.</p>
+        </div>
+        <div class="preview-tag">Test UI</div>
+      </header>
+
+      <section class="workspace" aria-label="Shape game test">
+        <div class="drawing-card">
+          <div class="card-top">
+            <div>
+              <div class="section-label">YOUR CHALLENGE</div>
+              <div class="target-row">
+                <span id="target" class="target">Circle</span>
+                <span id="progress" class="progress">1 of 4</span>
+              </div>
+            </div>
+            <div class="score-chip"><span>POINTS</span><strong id="score">0</strong></div>
+          </div>
+
+          <div class="canvas-wrap">
+            <canvas id="drawing" width="400" height="400" aria-label="Draw the requested shape here"></canvas>
+          </div>
+
+          <div class="actions">
+            <button id="submit" class="primary" type="button">Check my drawing</button>
+            <button id="clear" class="secondary" type="button">Clear drawing</button>
+          </div>
+          <p id="feedback" class="feedback" role="status" aria-live="polite">Loading drawing controls…</p>
+        </div>
+
+        <aside class="side-card">
+          <div class="section-label">SESSION</div>
+          <div class="stat"><span>Shapes completed</span><strong id="matched">0 / 4</strong></div>
+          <div class="stat"><span>Drawings checked</span><strong id="submissions">0</strong></div>
+          <div class="stat"><span>Last detected shape</span><strong id="detected">—</strong></div>
+          <div class="stat"><span>Drawing quality</span><strong id="quality">—</strong></div>
+
+          <label class="field-label" for="challenge-set">Challenges in a new game</label>
+          <select id="challenge-set">
+            <option value="all">All four shapes</option>
+            <option value="circle">Circle only</option>
+            <option value="triangle">Triangle only</option>
+            <option value="square">Square only</option>
+            <option value="rectangle">Rectangle only</option>
+          </select>
+          <button id="new-game" class="secondary full" type="button">Start new game</button>
+          <button id="finish" class="text-button" type="button">Finish this game early</button>
+
+          <div class="test-tools">
+            <div class="section-label">TEST CONTROLS</div>
+            <button id="resend" class="text-button" type="button" disabled>Resend last drawing ID</button>
+            <p>Resending should leave points and the drawing count unchanged.</p>
+          </div>
+          <div class="saved" id="saved">Scores from this page visit appear here.</div>
+        </aside>
+      </section>
+      <footer>This browser preview is separate from the mobile app. Scores are kept only while this page is open.</footer>
+    </main>
+    <script>
+      window.addEventListener('error', (event) => {
+        const feedback = document.getElementById('feedback');
+        if (feedback) feedback.textContent = `Preview could not start: ${event.message}`;
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        const feedback = document.getElementById('feedback');
+        if (feedback) feedback.textContent = `Preview could not start: ${String(event.reason)}`;
+      });
+    </script>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

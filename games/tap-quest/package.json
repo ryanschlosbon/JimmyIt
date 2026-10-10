@@ -1,0 +1,13 @@
+{
+  "name": "@jimmyit/game-tap-quest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Accessible stylus target, tracing, memory, and calm games.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jimmyit/game-sdk": "*"
+  }
+}
