@@ -31,6 +31,7 @@ The players are children and teens with motor differences. That drives every rul
 src/design/palettes.ts   every color, grouped into color styles (Classic, Calm, …)
 src/design/tokens.ts     fonts, spacing, radii, minimum sizes, type sizes
 src/design/motion.ts     every animation by name, with an on/off switch
+src/design/sounds.ts     every sound by name, and which moment plays which
 src/theme.ts             getTheme(dark, styleId): the palette screens draw with
 src/components/Tappable.tsx   the one pressable surface (press, hover, focus)
 ```
@@ -119,7 +120,7 @@ color, add its name to `BannerColorName` and an entry to **every** palette.
 
 Every pressable thing is built on **`Tappable`** (or `Button`, which uses it). Never use a bare `Pressable`. That gives every press the same feel:
 
-- **Press:** the button sinks 3 px, shrinks to 95 % and darkens slightly (`ANIMATION(pressDepress)`).
+- **Press:** the button sinks 3 px, shrinks to 95 % and darkens slightly (`ANIMATION(pressDepress)`), and clicks (`sound`, default `'click'`; `null` for none).
 - **Hover** (mouse, web): a faint darkening.
 - **Keyboard focus:** a 3 px `focus` ring outside the button, shown only after keyboard use.
 - **Disabled:** 45 % opacity. Say why nearby when it isn't obvious.
@@ -257,6 +258,29 @@ Rules for new animations:
 - **Keep it short.** 120–350 ms for responses to a touch. Slow only for ambient motion such as the bubbles.
 - **Animate transform and opacity** with `useNativeDriver: USE_NATIVE_DRIVER`. Layout properties (width, height) need `useNativeDriver: false` and should stay rare.
 - **Never** flash, shake, or loop anything near the content the child is using.
+
+## Sound
+
+Short, poppy and clean: sine pops and glassy plucks in one bright key (C major
+pentatonic). **No music**, no noise or buzz, nothing longer than about a second,
+and never a "wrong" buzzer. A miss makes no sound at all; `nudge` is a soft boop.
+
+- **The files** in `assets/sounds/` are made by `scripts/generate-sounds.py` (Python, standard library only). To change how a sound sounds, edit its numbers there and run `python3 apps/mobile/scripts/generate-sounds.py`. Don't drop in downloaded sounds: these are ours, with no licenses to track.
+- **Which sound plays when** is in `src/design/sounds.ts`: game `Feedback` names (`FEEDBACK_SOUNDS`), score moments (points pop, milestones chime, a new best celebrates) and rewards (level-up, badge). Every button `click`s through `Tappable`.
+- **One sound per moment.** When several are asked for at once, the highest `priority` plays. Each sound has a `gapMs` so fast play never turns into a buzz, and celebrations `hold` quieter game sounds for a moment. Button clicks are never held back.
+- **Grown-ups can switch it off:** Settings → Look & feel → Sounds. Sounds also stay quiet when the phone is on silent, and mix with any music already playing.
+- **To add a sound:** a function in the generator, its name in `SOUND_NAMES` and `SOUNDS`, and its file in `FILES` (`src/sound-player.ts`).
+
+| Sound | Plays for |
+| --- | --- |
+| `click` | Every button press |
+| `pop1`–`pop3` | Points in an app game (in turn) |
+| `tap`, `tick`, `nudge`, `success` | The game's `feedback('tap' / 'tick' / 'nudge' / 'success')` |
+| `start` | An app game begins |
+| `milestone` | 100, 500, 1000… points |
+| `celebrate` | A new best, during or at the end of a game; `feedback('celebrate')` |
+| `finish` | A game ends |
+| `levelUp`, `badge` | A new level or badge |
 
 ## Accessibility checklist
 

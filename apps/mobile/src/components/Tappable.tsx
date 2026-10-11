@@ -1,10 +1,13 @@
 // The one pressable surface every button in the app is built on. It gives each
 // press the same feel: the button sinks and darkens a little (ANIMATION(pressDepress)),
-// shows a highlight on hover (web), and draws a focus ring for keyboard users.
+// clicks (design/sounds.ts), shows a highlight on hover (web), and draws a focus ring
+// for keyboard users.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View, type AccessibilityRole,
   type AccessibilityState, type Insets, type StyleProp, type ViewStyle } from 'react-native';
 import { ANIMATIONS, USE_NATIVE_DRIVER } from '../design/motion';
+import type { SoundName } from '../design/sounds';
+import { appSounds } from '../sound-cues';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -31,11 +34,13 @@ export interface TappableProps {
   readonly testID?: string;
   /** False takes the button out of keyboard focus (e.g. on a banner that is off to the side). */
   readonly focusable?: boolean;
+  /** The sound a press makes; null for none. Default 'click'. */
+  readonly sound?: SoundName | null;
 }
 
 export function Tappable({ onPress, children, style, disabled = false, accessibilityLabel, accessibilityHint,
   accessibilityRole = 'button', accessibilityState, focusColor = '#9A6E00', hitSlop, pressShade = 0.1,
-  testID, focusable = true }: TappableProps) {
+  testID, focusable = true, sound = 'click' }: TappableProps) {
   const press = useRef(new Animated.Value(0)).current;
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -49,6 +54,10 @@ export function Tappable({ onPress, children, style, disabled = false, accessibi
       useNativeDriver: USE_NATIVE_DRIVER }).start();
   };
   useEffect(() => { if (disabled) press.setValue(0); }, [disabled, press]);
+  const handlePress = () => {
+    if (sound) appSounds.play(sound);
+    onPress();
+  };
 
   const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, motion.scale] });
   const translateY = press.interpolate({ inputRange: [0, 1], outputRange: [0, motion.sinkPx] });
@@ -58,7 +67,7 @@ export function Tappable({ onPress, children, style, disabled = false, accessibi
     // react-native-web reads the aria-* forms of the state; native reads accessibilityState.
     aria-disabled={disabled} aria-selected={accessibilityState?.selected} aria-checked={accessibilityState?.checked}
     aria-expanded={accessibilityState?.expanded}
-    hitSlop={hitSlop} focusable={focusable && !disabled} onPress={onPress} onPressIn={() => animateTo(1)} onPressOut={() => animateTo(0)}
+    hitSlop={hitSlop} focusable={focusable && !disabled} onPress={handlePress} onPressIn={() => animateTo(1)} onPressOut={() => animateTo(0)}
     onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)}
     onFocus={() => setFocused(keyboardModality || Platform.OS !== 'web')} onBlur={() => setFocused(false)}
     style={[style, { transform: [{ translateY }, { scale }] }, disabled && styles.disabled]}>

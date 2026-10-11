@@ -7,11 +7,13 @@ import { GAME_CATALOG } from './games';
 import { registerShapeKey, removeShapeKey } from './shape-recognition-service';
 import { DEFAULT_COLOR_STYLE, isColorStyleId, type ColorStyleId } from './design/palettes';
 import { createJimmyNicknamePreference } from './jimmy-nickname';
+import { appSounds } from './sound-cues';
 
 const nicknamePreference = createJimmyNicknamePreference(AsyncStorage);
 
 /** Where appearance choices are saved on the device. */
-const APPEARANCE_KEYS = { dark: 'jimmy.appearance', bubbles: 'jimmy.bubbles', colorStyle: 'jimmy.colorStyle' } as const;
+const APPEARANCE_KEYS = { dark: 'jimmy.appearance', bubbles: 'jimmy.bubbles', colorStyle: 'jimmy.colorStyle',
+  sounds: 'jimmy.sounds' } as const;
 
 /** 'confirming': Jimmy is asking the child "connect to this phone?" on its screen. */
 export type Connection = 'connected' | 'disconnected' | 'searching' | 'confirming';
@@ -33,6 +35,7 @@ export function useJimmy() {
   const toy = useToyState();
   const [dark, setDarkState] = useState(false);
   const [bubbles, setBubblesState] = useState(true);
+  const [sounds, setSoundsState] = useState(true);
   const [colorStyle, setColorStyleState] = useState<ColorStyleId>(DEFAULT_COLOR_STYLE);
   const [appearanceReady, setAppearanceReady] = useState(false);
   const [nickname, setNickname] = useState<string | null>(null);
@@ -46,11 +49,13 @@ export function useJimmy() {
   useEffect(() => {
     let active = true;
     Promise.all([AsyncStorage.getItem(APPEARANCE_KEYS.dark), AsyncStorage.getItem(APPEARANCE_KEYS.bubbles),
-      AsyncStorage.getItem(APPEARANCE_KEYS.colorStyle), nicknamePreference.load()])
-      .then(([darkValue, bubblesValue, styleValue, savedNickname]) => {
+      AsyncStorage.getItem(APPEARANCE_KEYS.colorStyle), nicknamePreference.load(), AsyncStorage.getItem(APPEARANCE_KEYS.sounds)])
+      .then(([darkValue, bubblesValue, styleValue, savedNickname, soundsValue]) => {
       if (!active) return;
       setDarkState(darkValue === 'dark');
       setBubblesState(bubblesValue !== 'off');
+      setSoundsState(soundsValue !== 'off');
+      appSounds.setEnabled(soundsValue !== 'off');
       if (isColorStyleId(styleValue)) setColorStyleState(styleValue);
       setNickname(savedNickname);
     })
@@ -112,6 +117,12 @@ export function useJimmy() {
   };
   const setDark = (next: boolean) => { setDarkState(next); saveAppearance(APPEARANCE_KEYS.dark, next ? 'dark' : 'light'); };
   const setBubbles = (next: boolean) => { setBubblesState(next); saveAppearance(APPEARANCE_KEYS.bubbles, next ? 'on' : 'off'); };
+  const setSounds = (next: boolean) => {
+    setSoundsState(next);
+    appSounds.setEnabled(next);
+    if (next) appSounds.play('success'); // so turning sounds on is heard
+    saveAppearance(APPEARANCE_KEYS.sounds, next ? 'on' : 'off');
+  };
   const setColorStyle = (next: ColorStyleId) => { setColorStyleState(next); saveAppearance(APPEARANCE_KEYS.colorStyle, next); };
   const renameToy = async (draft: string) => { setNickname(await nicknamePreference.save(draft)); };
   const resetToyName = async () => { await nicknamePreference.reset(); setNickname(null); };
@@ -129,6 +140,8 @@ export function useJimmy() {
     dark, setDark,
     /** Floating background bubbles (Settings → Appearance). */
     bubbles, setBubbles,
+    /** Pops, chimes and button clicks (Settings → Look & feel). */
+    sounds, setSounds,
     colorStyle, setColorStyle,
     aiSettings, setAISettings, aiService,
     shapeSessionToken, saveShapeKey, clearShapeKey,
