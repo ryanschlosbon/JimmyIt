@@ -198,6 +198,8 @@ export function SettingsScreen({ theme, state, replayIntro }: {
       <Heading theme={theme} size={TYPE.heading}>Look & feel</Heading>
       <SwitchRow theme={theme} title="Floating bubbles" onText="Bubbles drift in the background"
         offText="Bubbles stay still" value={state.bubbles} onChange={state.setBubbles} />
+      <SwitchRow theme={theme} title="Sounds" onText="Pops and chimes play as you play"
+        offText="Jimmy’s app stays quiet" value={state.sounds} onChange={state.setSounds} />
       <View accessibilityRole="radiogroup" accessibilityLabel="Color style" style={{ gap: SPACE.md }}>
         <Body theme={theme} small>Color style</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm }}>

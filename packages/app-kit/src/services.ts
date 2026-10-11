@@ -3,6 +3,7 @@ import {
   createAppId,
   createEmitter,
   createScoreRepository,
+  type FeedbackName,
   type KeyValueStore,
   type Listener,
   type Scheduler,
@@ -44,6 +45,11 @@ export interface JimmyServices {
    */
   onScoreEvent(listener: Listener<ScoreEvent>): Unsubscribe;
   /**
+   * Every feedback an app game asks for (tap, tick, success…), with or without the toy. The toy, when connected,
+   * already plays the haptic; use this for sounds or on-screen effects.
+   */
+  onFeedback(listener: Listener<FeedbackName>): Unsubscribe;
+  /**
    * A level-up or a new badge, from any record saved after startup (app games,
    * and toy games synced or finished live). The connected toy already plays the
    * `levelUp` or `badge` haptic (level-up wins if both); use this for the screen.
@@ -84,6 +90,7 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
   const scheduler = options.scheduler ?? systemScheduler;
   const repository = createScoreRepository(options.storage);
   const scoreEvents = createEmitter<ScoreEvent>();
+  const feedbackEvents = createEmitter<FeedbackName>();
   let identity: Promise<AppIdentity> | null = null;
   const appName = options.appName ?? 'Jimmy app';
   const connection = createConnectionManager({
@@ -117,6 +124,7 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
       identity = Promise.resolve({ appId, appName });
     },
     onScoreEvent: (listener) => scoreEvents.subscribe(listener),
+    onFeedback: (listener) => feedbackEvents.subscribe(listener),
     onReward: (listener) => rewards.onReward(listener),
     play(game, playOptions = {}) {
       if (!canPlay(game)) throw new ToyNotConnectedError(game.id);
@@ -130,6 +138,7 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
         ...(playOptions.tickMs === undefined ? {} : { tickMs: playOptions.tickMs }),
         ...(options.onDeviceError ? { onDeviceError: options.onDeviceError } : {}),
         onScoreEvent: (event) => scoreEvents.emit(event),
+        onFeedback: (name) => feedbackEvents.emit(name),
       });
     },
   };

@@ -42,10 +42,8 @@
 
 using namespace jimmyit;
 
-enum class Screen : uint8_t { Boot, Welcome, Instructions, Ready, Playing, Result, Notice, App };
+enum class Screen : uint8_t { Boot, Ready, Playing, Result, Notice, App };
 
-constexpr uint32_t kWelcomeMs = 5000;
-constexpr uint32_t kInstructionsMs = 10000;
 constexpr uint32_t kResultMs = jimmyit::ResultAnimation::kTotalMs;  // the score, then Jimmy's hop
 constexpr uint32_t kNoticeMs = 2000;
 constexpr uint32_t kForgetPhonesHoldMs = 5000;
@@ -454,13 +452,7 @@ void updateStandalone(uint32_t nowMs) {
 
   switch (screen) {
     case Screen::Boot:
-      if (elapsed >= BootAnimation::kTotalMs || pressed) goTo(Screen::Welcome, nowMs);  // a press skips ahead
-      break;
-    case Screen::Welcome:
-      if (elapsed >= kWelcomeMs || pressed) goTo(Screen::Instructions, nowMs);  // a press skips ahead
-      break;
-    case Screen::Instructions:
-      if (elapsed >= kInstructionsMs || pressed) armGame(nowMs);
+      if (elapsed >= BootAnimation::kTotalMs || pressed) armGame(nowMs);  // a press skips ahead
       break;
     case Screen::Ready: {
       if (checkForgetPhones(nowMs)) break;
@@ -526,8 +518,6 @@ void updateStandalone(uint32_t nowMs) {
 void drawScreen(uint32_t nowMs) {
   switch (screen) {
     case Screen::Boot: uiBoot(nowMs - screenStartMs); break;
-    case Screen::Welcome: uiWelcome(); break;
-    case Screen::Instructions: uiInstructions(); break;
     case Screen::Ready: uiReady(gameTitle(kToyGames[selectedGame]), kToyGameCount > 1, linked); break;
     case Screen::Playing: uiPoints(game.score(), linked, graceShown ? game.graceRemaining(nowMs) : -1.0f); break;
     case Screen::Result: uiResult(resultScore, resultNewBest, nowMs - screenStartMs); break;

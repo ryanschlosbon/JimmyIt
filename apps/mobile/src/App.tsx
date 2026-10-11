@@ -23,6 +23,7 @@ import type { ScoreRecord } from '@jimmyit/core';
 import type { SaveStatus } from '@jimmyit/game-sdk';
 import { getTheme } from './theme';
 import { useJimmy } from './use-jimmy';
+import { useSounds } from './use-sounds';
 import { DRAWING_GAMES, PLAY_SHELF, SHAPE_CHALLENGE_GAME, TIMED_PRACTICE_SECONDS, tapQuestGame, timedPracticeGame,
   type Activity, type ShelfGameId } from './games';
 import { createSessionShapeRecognizer } from './shape-recognition-service';
@@ -88,6 +89,7 @@ export function App() {
 
 function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const state = useJimmy();
+  useSounds();
   const shapeRecognizer = useMemo(() => createSessionShapeRecognizer(state.shapeSessionToken), [state.shapeSessionToken]);
   const theme = getTheme(state.dark, state.colorStyle);
   const [fontsLoaded, fontError] = useFonts({ [FONTS.display]: Baloo2_700Bold, [FONTS.displayHeavy]: Baloo2_800ExtraBold,

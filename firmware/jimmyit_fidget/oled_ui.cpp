@@ -104,10 +104,6 @@ void uiFlush() {
   if (displayOk) display.display();
 }
 
-void uiWelcome() { showMessage("WELCOME TO KNIGHT HACKS!\n\nFIDGET QUEST"); }
-
-void uiInstructions() { showMessage("DRAW SHAPES, LETTERS, AND NUMBERS TO EARN POINTS!"); }
-
 void uiReady(const char* gameTitle, bool showMenuHint, bool linked) {
   begin();
   display.setTextWrap(false);

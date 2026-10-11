@@ -18,6 +18,8 @@ export interface KnobQuestState {
   /** Vertical speed (positive = falling), so the view can stretch Jimmy in the air. */
   readonly verticalVelocity: number;
   readonly grounded: boolean;
+  /** Boost left, 0-1. Lifting spends it, and only boost lifts Jimmy; landing fills it again. */
+  readonly boost: number;
   /** Game time and place of the last takeoff and landing, for sparks and squash. -Infinity before the first. */
   readonly jumpedAtMs: number; readonly jumpedFrom: { readonly x: number; readonly y: number };
   readonly landedAtMs: number; readonly landingSpeed: number;
@@ -39,9 +41,20 @@ export type KnobQuestDifficulty = 'easy' | 'normal' | 'hard';
 
 const PLAYER_SIZE = 4;
 const HORIZONTAL_SPEED = 24;
-const UPWARD_THRUST = 42;
-const GRAVITY = 18;
+const UPWARD_THRUST = 46;
+/** Gravity while Jimmy rises or stands. */
+const RISE_GRAVITY = 18;
+/** Gravity on the way down: strong with no lift, weak (a glide) with full-speed lift. */
+const FALL_GRAVITY_STRONG = 32;
+const FALL_GRAVITY_WEAK = 10;
 const MAX_VERTICAL_SPEED = 28;
+/**
+ * Seconds of full-speed lift in a full boost. Spending it all at full speed climbs about 36 units; slower turning
+ * climbs less, because more of the boost goes into holding Jimmy up against gravity.
+ */
+const BOOST_SECONDS = 1;
+/** The highest a floating platform's top may be, so a strong jump from the floor below always reaches it. */
+const HIGHEST_PLATFORM_Y = 40;
 const MAX_LIVES = 3;
 const PLATFORM_POINTS = 20;
 const CHECKPOINT_POINTS = 50;
@@ -88,7 +101,7 @@ export function createKnobQuestLevel(seed: number, difficulty: KnobQuestDifficul
   let platformY = 54;
   for (let index = 0; index < platformCount; index++) {
     const x = 14 + index * step + Math.round(random() * 3);
-    platformY = Math.max(26, Math.min(55, platformY + Math.round(random() * 12) - 7));
+    platformY = Math.max(HIGHEST_PLATFORM_Y, Math.min(55, platformY + Math.round(random() * 12) - 7));
     floating.push({ x, y: platformY, width: platformWidth + Math.floor(random() * 3), height: 3 });
   }
   const holes: Rect[] = [];
@@ -156,6 +169,7 @@ export function createKnobQuestGame(level?: KnobQuestLevel,
       let screwEnergy = 0;
       let verticalVelocity = 0;
       let grounded = true;
+      let boostLeftS = BOOST_SECONDS;
       let jumpedAtMs = Number.NEGATIVE_INFINITY;
       let jumpedFrom = { x, y };
       let landedAtMs = Number.NEGATIVE_INFINITY;
@@ -184,6 +198,7 @@ export function createKnobQuestGame(level?: KnobQuestLevel,
         spinEnergy = 0;
         screwEnergy = 0;
         verticalVelocity = 0;
+        boostLeftS = BOOST_SECONDS;
         session.feedback('nudge');
         if (lives <= 0) {
           outOfLives = true;
@@ -198,6 +213,7 @@ export function createKnobQuestGame(level?: KnobQuestLevel,
 
       return {
         getState: () => ({ x, y, width: PLAYER_SIZE, height: PLAYER_SIZE, verticalVelocity, grounded,
+          boost: boostLeftS / BOOST_SECONDS,
           jumpedAtMs, jumpedFrom, landedAtMs, landingSpeed, lives, maxLives: MAX_LIVES, respawnedAtMs,
           level: activeLevel, visited: [...visited], restarts, checkpointReached,
           fireballs: fallingFireballs(activeLevel, lastTickMs), completed, outOfLives, elapsedMs: lastTickMs,
@@ -229,9 +245,16 @@ export function createKnobQuestGame(level?: KnobQuestLevel,
           const wasGrounded = grounded;
           x = Math.max(0, Math.min(activeLevel.width - PLAYER_SIZE, x + moveX * HORIZONTAL_SPEED * dt));
           if (activeLevel.platforms.some((platform) => overlaps(x, y, platform))) x = oldX;
-          // Stronger turning builds upward momentum, followed by a gentle gravity-driven arc.
+          // Lifting spends boost, so Jimmy can't fly over the level; stronger turning climbs higher on the same boost.
+          // On the way down, lifting still softens gravity (a glide) even with no boost left.
+          const lift = Math.max(0, -moveY);
+          const drop = Math.max(0, moveY);
+          const liftS = Math.min(lift * dt, boostLeftS);
+          const gravity = verticalVelocity > 0
+            ? FALL_GRAVITY_STRONG + (FALL_GRAVITY_WEAK - FALL_GRAVITY_STRONG) * lift
+            : RISE_GRAVITY;
           verticalVelocity = Math.max(-MAX_VERTICAL_SPEED, Math.min(MAX_VERTICAL_SPEED,
-            verticalVelocity + (moveY * UPWARD_THRUST + GRAVITY) * dt));
+            verticalVelocity + (gravity + drop * UPWARD_THRUST) * dt - liftS * UPWARD_THRUST));
           const fallSpeed = verticalVelocity;
           y = Math.max(0, y + verticalVelocity * dt);
           if (y === 0) verticalVelocity = 0;
@@ -251,6 +274,9 @@ export function createKnobQuestGame(level?: KnobQuestLevel,
             else y = oldY;
             verticalVelocity = 0;
           }
+          // Standing on anything fills the boost; in the air, lifting spends it.
+          if (grounded) boostLeftS = BOOST_SECONDS;
+          else boostLeftS = Math.max(0, boostLeftS - liftS);
           if (wasGrounded && !grounded && verticalVelocity < 0) {
             jumpedAtMs = elapsedMs;
             jumpedFrom = { x: oldX, y: oldY };

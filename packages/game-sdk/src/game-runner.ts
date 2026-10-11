@@ -4,6 +4,7 @@ import {
   createEmitter,
   createScoreCounter,
   createScoreEventTracker,
+  type FeedbackName,
   INITIAL_FIDGET_STATE,
   type Listener,
   type Scheduler,
@@ -46,6 +47,8 @@ export interface StartGameOptions {
   readonly onDeviceError?: (error: unknown) => void;
   /** Also receives every score event (app-kit uses this to feed one app-wide stream). */
   readonly onScoreEvent?: (event: ScoreEvent) => void;
+  /** Also receives every feedback() the game asks for, toy or no toy (the app plays a matching sound). */
+  readonly onFeedback?: (name: FeedbackName) => void;
 }
 
 /** Points events closer together than this reach the toy merged into one. */
@@ -141,7 +144,10 @@ export function startGame<TState, TAction = never>(
     score,
     getInput: () => device()?.getState() ?? INITIAL_FIDGET_STATE,
     elapsedMs,
-    feedback: (name) => toDevice(device()?.feedback(name)),
+    feedback: (name) => {
+      options.onFeedback?.(name);
+      toDevice(device()?.feedback(name));
+    },
     haptic: (...effects) => toDevice(device()?.haptic(...effects)),
     showOnFidget: (line, text) => {
       if (useDisplay()) toDevice(device()?.showText(line, text));
