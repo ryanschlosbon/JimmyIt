@@ -59,7 +59,7 @@ export interface GeneratedLevel {
   readonly theme: string;
   readonly timing: { readonly responseWindowMs: number | null; readonly activityDurationMs: number | null };
   readonly sensory: { readonly motion: boolean; readonly sound: boolean; readonly distractions: boolean };
-  readonly source: 'local' | 'gemini';
+  readonly source: 'local';
 }
 
 export interface PersonalizationRecommendation {
@@ -77,7 +77,7 @@ export interface PersonalizationRecommendation {
 }
 
 export interface AIProvider {
-  readonly name: 'local' | 'gemini';
+  readonly name: 'local';
   isAvailable(): Promise<boolean>;
   generate(request: GameGenerationRequest): Promise<unknown>;
   testConnection(): Promise<boolean>;

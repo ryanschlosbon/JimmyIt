@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type ConnectionErrorKind, useConnection, useScores, useToyState } from '@jimmyit/app-kit';
 import { BADGE_VISUALS } from './badge-visuals';
-import { AI_MODELS, DEFAULT_AI_SETTINGS, createConfiguredAIService, registerGeminiKey,
-  removeGeminiKey, type AISettings } from './ai-service';
+import { DEFAULT_AI_SETTINGS, createConfiguredAIService, parseAISettings, type AISettings } from './ai-service';
 import { GAME_CATALOG } from './games';
 import { registerShapeKey, removeShapeKey } from './shape-recognition-service';
 import { DEFAULT_COLOR_STYLE, isColorStyleId, type ColorStyleId } from './design/palettes';
@@ -38,8 +37,6 @@ export function useJimmy() {
   const [appearanceReady, setAppearanceReady] = useState(false);
   const [nickname, setNickname] = useState<string | null>(null);
   const [aiSettings, setAISettingsState] = useState<AISettings>(DEFAULT_AI_SETTINGS);
-  const [aiConnection, setAIConnection] = useState<'unchecked' | 'checking' | 'ready' | 'unavailable'>('unchecked');
-  const [aiSessionToken, setAISessionToken] = useState<string | undefined>();
   const [shapeSessionToken, setShapeSessionToken] = useState<string | undefined>();
   const [localError, setLocalError] = useState<string | null>(null);
   const [calibration, setCalibration] = useState(0);
@@ -65,32 +62,12 @@ export function useJimmy() {
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem('jimmy.ai.settings').then(raw => {
-      if (!active || !raw) return;
-      const parsed: unknown = JSON.parse(raw);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return;
-      const value = parsed as Record<string, unknown>;
-      if (typeof value.generationEnabled !== 'boolean' ||
-        !['offline', 'gemini'].includes(String(value.provider)) ||
-        !AI_MODELS.includes(value.model as AISettings['model']) ||
-        typeof value.personalizationEnabled !== 'boolean') return;
-      setAISettingsState(value as unknown as AISettings);
-    }).catch(() => { if (active) setLocalError('Your AI choices could not be opened. Offline play is available.'); });
+      if (active) setAISettingsState(parseAISettings(raw));
+    }).catch(() => { if (active) setLocalError('Your activity choices could not be opened. Play is still ready.'); });
     return () => { active = false; };
   }, []);
 
-  const aiService = useMemo(() => createConfiguredAIService(aiSettings, aiSessionToken), [aiSettings, aiSessionToken]);
-  const saveGeminiKey = async (apiKey: string): Promise<void> => {
-    const token = await registerGeminiKey(apiKey);
-    setAISessionToken(token);
-    setAIConnection('unchecked');
-    setAISettings({ ...aiSettings, provider: 'gemini', generationEnabled: true });
-  };
-  const clearGeminiKey = async (): Promise<void> => {
-    const token = aiSessionToken;
-    setAISessionToken(undefined);
-    setAIConnection('unchecked');
-    if (token) await removeGeminiKey(token);
-  };
+  const aiService = useMemo(() => createConfiguredAIService(), []);
   const saveShapeKey = async (apiKey: string): Promise<void> => {
     const token = await registerShapeKey(apiKey);
     const previous = shapeSessionToken;
@@ -104,14 +81,8 @@ export function useJimmy() {
   };
   const setAISettings = (next: AISettings) => {
     setAISettingsState(next);
-    setAIConnection('unchecked');
     AsyncStorage.setItem('jimmy.ai.settings', JSON.stringify(next))
-      .catch(() => setLocalError('Your AI choices changed, but could not be saved for next time.'));
-  };
-  const testAIConnection = () => {
-    setAIConnection('checking');
-    aiService.testAIConnection().then(available => setAIConnection(available ? 'ready' : 'unavailable'))
-      .catch(() => setAIConnection('unavailable'));
+      .catch(() => setLocalError('Your activity choices changed, but could not be saved for next time.'));
   };
 
   const stopCalibration = () => {
@@ -159,8 +130,7 @@ export function useJimmy() {
     /** Floating background bubbles (Settings → Appearance). */
     bubbles, setBubbles,
     colorStyle, setColorStyle,
-    aiSettings, setAISettings, aiConnection, testAIConnection, aiService,
-    hasGeminiKey: aiSessionToken !== undefined, saveGeminiKey, clearGeminiKey,
+    aiSettings, setAISettings, aiService,
     shapeSessionToken, saveShapeKey, clearShapeKey,
     ready: appearanceReady && !scores.loading,
     error,

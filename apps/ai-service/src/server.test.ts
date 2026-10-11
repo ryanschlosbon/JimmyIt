@@ -1,33 +1,31 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
-import { defaultAccessibilityPreferences, generateLocalLevel, type AIProvider,
-  type GameGenerationRequest } from '@jimmyit/ai';
-import { createAIHttpServer } from './server';
-
-const request: GameGenerationRequest = { gameType: 'tapQuest', theme: 'garden', difficulty: 2,
-  accessibilityPreferences: defaultAccessibilityPreferences(), availableInputControls: ['screenTouch'], targetCount: 3 };
-const provider: AIProvider = { name: 'gemini', isAvailable: async () => true, testConnection: async () => true,
-  generate: async () => ({ ...generateLocalLevel(request), source: 'gemini' }) };
+import { createAIHttpServer, type AIServerOptions } from './server';
 
 const servers: ReturnType<typeof createAIHttpServer>[] = [];
 afterEach(async () => { await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))); });
 
-async function start(limit = 12): Promise<string> {
-  const server = createAIHttpServer({ providerForModel: () => provider, maxRequestsPerMinute: limit, nowMs: () => 100 });
+const square = { width: 100, height: 100, strokes: [[
+  { x: 10, y: 10 }, { x: 90, y: 10 }, { x: 90, y: 90 }, { x: 10, y: 90 }, { x: 10, y: 10 },
+]] };
+const fakeModel = (keys: string[] = []): NonNullable<AIServerOptions['shapeInferenceForToken']> => (key) => ({
+  isAvailable: () => true, predict: async () => {
+    keys.push(key);
+    return { labels: [{ label: 'Square ◻', score: 0.9 }], inferenceTimeMs: 10 };
+  },
+});
+
+async function start(options: AIServerOptions): Promise<string> {
+  const server = createAIHttpServer({ nowMs: () => 100, ...options });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-async function post(base: string, body: unknown): Promise<Response> {
-  return fetch(`${base}/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body) });
-}
-
-describe('local AI proxy', () => {
+describe('local shape AI proxy', () => {
   it('serves model labels without accepting unrelated child data', async () => {
     let called = 0;
-    const server = createAIHttpServer({ providerForModel: () => provider,
+    const server = createAIHttpServer({
       shapeInference: { isAvailable: () => true, predict: async () => {
         called++;
         return { labels: [{ label: 'Circle ◯', score: 0.9 }], inferenceTimeMs: 15 };
@@ -51,33 +49,37 @@ describe('local AI proxy', () => {
       labels: [{ label: 'Circle ◯', score: 0.9 }] });
     expect(called).toBe(1);
   });
-  it('accepts a key only from the local preview and removes its session', async () => {
-    const keys: (string | undefined)[] = [];
-    const server = createAIHttpServer({ allowedOrigin: 'http://localhost:8081',
-      providerForModel: (_model, key) => { keys.push(key); return provider; }, nowMs: () => 100 });
-    servers.push(server);
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
-    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    const body = JSON.stringify({ apiKey: 'test-secret-key' });
-    expect((await fetch(`${base}/session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })).status).toBe(403);
-    expect((await fetch(`${base}/session`, { method: 'POST', headers: { Origin: 'http://other.local',
-      'Content-Type': 'application/json' }, body })).status).toBe(403);
-    const saved = await fetch(`${base}/session`, { method: 'POST', headers: { Origin: 'http://localhost:8081',
-      'Content-Type': 'application/json' }, body });
+  it('accepts a key from the native app, which sends no Origin', async () => {
+    const keys: string[] = [];
+    const base = await start({ allowedOrigin: 'http://localhost:8081', shapeInferenceForToken: fakeModel(keys) });
+    const saved = await fetch(`${base}/shape/session`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: 'test-hf-key' }) });
     expect(saved.status).toBe(200);
+    expect(saved.headers.get('access-control-allow-origin')).toBeNull();
     const { token } = await saved.json() as { token: string };
-    const status = await fetch(`${base}/status`, { headers: { Origin: 'http://localhost:8081',
-      'X-Session-Token': token } });
-    expect(status.status).toBe(200);
-    expect(keys).toEqual(['test-secret-key']);
-    expect((await fetch(`${base}/session`, { method: 'DELETE', headers: { Origin: 'http://localhost:8081',
-      'X-Session-Token': token } })).status).toBe(200);
-    await fetch(`${base}/status`, { headers: { 'X-Session-Token': token } });
-    expect(keys).toEqual(['test-secret-key', undefined]);
+    expect((await fetch(`${base}/shape/predict`, { method: 'POST', headers: { 'Content-Type': 'application/json',
+      'X-Shape-Session': token }, body: JSON.stringify({ drawing: square }) })).status).toBe(200);
+    expect(keys).toEqual(['test-hf-key']);
+  });
+  it('accepts any configured preview origin and refuses other web pages', async () => {
+    const base = await start({ allowedOrigin: ['http://localhost:8081', 'http://127.0.0.1:8081'],
+      shapeInferenceForToken: fakeModel() });
+    const save = (origin: string) => fetch(`${base}/shape/session`, { method: 'POST', headers: { Origin: origin,
+      'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: 'test-hf-key' }) });
+    const saved = await save('http://127.0.0.1:8081');
+    expect(saved.status).toBe(200);
+    expect(saved.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:8081');
+    expect((await save('http://other.local')).status).toBe(403);
+  });
+  it('no longer serves Gemini routes', async () => {
+    const base = await start({});
+    expect((await fetch(`${base}/status`)).status).toBe(404);
+    expect((await fetch(`${base}/generate`, { method: 'POST', body: '{}' })).status).toBe(404);
+    expect((await fetch(`${base}/session`, { method: 'POST', body: '{}' })).status).toBe(404);
   });
   it('uses a temporary Hugging Face session for shape inference and revokes it', async () => {
     const keys: string[] = [];
-    const server = createAIHttpServer({ providerForModel: () => provider, nowMs: () => 100,
+    const server = createAIHttpServer({ nowMs: () => 100,
       allowedOrigin: 'http://localhost:8081',
       shapeInferenceForToken: (key) => ({ isAvailable: () => true, predict: async () => {
         keys.push(key);
@@ -112,20 +114,12 @@ describe('local AI proxy', () => {
     expect((await predict()).status).toBe(401);
     expect(keys).toEqual(['test-hf-key']);
   });
-  it('requires opt-in and rejects raw performance history', async () => {
-    const base = await start();
-    expect((await post(base, { model: 'gemini-3.8-flash', request })).status).toBe(400);
-    expect((await post(base, { optIn: true, model: 'gemini-3.8-flash',
-      request: { ...request, performance: { recentRounds: [] } } })).status).toBe(400);
-    expect((await post(base, { optIn: true, model: 'gemini-3.8-flash', request })).status).toBe(200);
-  });
-
-  it('reports model availability and limits requests', async () => {
-    const base = await start(1);
-    const status = await fetch(`${base}/status?model=gemini-3.8-flash`);
-    expect(await status.json()).toMatchObject({ available: true, model: 'gemini-3.8-flash' });
-    expect((await post(base, { optIn: true, model: 'gemini-3.8-flash', request })).status).toBe(200);
-    expect((await post(base, { optIn: true, model: 'gemini-3.8-flash', request })).status).toBe(429);
-    expect((await fetch(`${base}/status?model=unknown`)).status).toBe(400);
+  it('limits prediction requests', async () => {
+    const base = await start({ maxRequestsPerMinute: 1, shapeInference: { isAvailable: () => true,
+      predict: async () => ({ labels: [{ label: 'Square ◻', score: 0.9 }], inferenceTimeMs: 10 }) } });
+    const predict = () => fetch(`${base}/shape/predict`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawing: square }) });
+    expect((await predict()).status).toBe(200);
+    expect((await predict()).status).toBe(429);
   });
 });

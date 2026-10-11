@@ -51,7 +51,7 @@ export function validateGeneratedLevel(
     typeof value.title !== 'string' || !/^[\w ,.!'-]{1,50}$/.test(value.title) ||
     typeof value.instructions !== 'string' || !/^[\w ,.!'-]{1,120}$/.test(value.instructions) ||
     /\b(fail|wrong|lose|adhd|autis|diagnos)\b/i.test(value.instructions) ||
-    value.theme !== request.theme || !['local', 'gemini'].includes(String(value.source)) ||
+    value.theme !== request.theme || value.source !== 'local' ||
     !Array.isArray(value.targets) || !Array.isArray(value.sequence) ||
     !isObject(value.timing) || !isObject(value.sensory)) {
     throw new RangeError('invalid generated level');

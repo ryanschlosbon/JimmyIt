@@ -18,7 +18,7 @@ export interface TapQuestToy {
 
 export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoStart, onAutoStarted }: {
   readonly theme: Theme; readonly run: GameRunControls<TapQuestState, TapQuestAction>;
-  readonly onStart: (mode: TapQuestMode) => Promise<'local' | 'gemini' | null>; readonly toy: TapQuestToy;
+  readonly onStart: (mode: TapQuestMode) => Promise<'local' | null>; readonly toy: TapQuestToy;
   /** Chosen on the play screen's banner, and changeable here. */
   readonly mode: TapQuestMode; readonly onMode: (mode: TapQuestMode) => void;
   /** True after Play on the banner: start a game as soon as this screen opens, if one can start. */
@@ -39,7 +39,7 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
     setStarting(true);
     setPatternMessage(null);
     onStart(mode).then(source => {
-      if (source) setPatternMessage(source === 'gemini' ? 'New Gemini pattern' : 'New offline pattern');
+      if (source) setPatternMessage('New pattern');
     }).catch(() => setPatternMessage('Could not start this pattern. Please try again.'))
       .finally(() => setStarting(false));
   };
