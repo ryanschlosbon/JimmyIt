@@ -20,6 +20,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
   const compact = width < SETTINGS.columnBreakpoint;
   const phone = width < SIZE.compactWidth;
   const [showMore, setShowMore] = useState(false);
+  const [forgotten, setForgotten] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -169,6 +170,18 @@ export function SettingsScreen({ theme, state, replayIntro }: {
             <Body theme={theme} small>{state.connection === 'confirming'
               ? 'Press the right button on Jimmy to say yes. Switch off to cancel.'
               : connecting ? 'Looking for Jimmy… Switch off to cancel.' : 'Switch on to find Jimmy and play together.'}</Body>
+          </View>}
+          <View style={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm }}>
+            {state.connection === 'connected' && <Button theme={theme} compact icon="close" label="Disconnect"
+              onPress={state.disconnect} />}
+            <Button theme={theme} compact icon="undo" label="Forget Jimmy" onPress={() => {
+              state.forget();
+              setForgotten(true);
+            }} />
+          </View>
+          {forgotten && state.connection !== 'connected' && <View accessibilityLiveRegion="polite" style={{ width: '100%' }}>
+            <Body theme={theme} small>Jimmy forgot this tablet. Next time you connect, Jimmy will ask
+              “connect?” on its screen again.</Body>
           </View>}
         </SettingsCard>
         <SettingsCard theme={theme} icon="moon" color={theme.pink} iconColor={theme.berry}>

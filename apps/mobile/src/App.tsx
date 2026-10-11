@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState, Modal, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2/700Bold';
 import { Baloo2_800ExtraBold } from '@expo-google-fonts/baloo-2/800ExtraBold';
@@ -126,6 +126,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const tapQuestSeed = useRef(0);
   const knobQuestSeed = useRef(0);
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const compact = width < 680;
   // Games fill the screen instead of scrolling, so a drag on the play area always plays.
   const gameScreen = screen === 'draw' || isActivity(screen);
@@ -133,6 +134,15 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   useEffect(() => {
     if (screen !== 'buttonHero' && screen !== 'knobQuest') return;
     return attachGameKeyboard(screen, event => handleGameInput.current(event));
+  }, [screen]);
+  // Leaving a game ends its run (every point kept, no finish dialog) and resets that screen, so only the game on
+  // screen ever runs and holds the toy. A failed save stays put, so its Retry button is still there on return.
+  const toyGameRuns = useRef({ timed, tapQuest, buttonHero, knobQuest });
+  toyGameRuns.current = { timed, tapQuest, buttonHero, knobQuest };
+  useEffect(() => {
+    for (const [name, controls] of Object.entries(toyGameRuns.current)) {
+      if (name !== screen && controls.status !== 'idle' && controls.saveStatus !== 'failed') controls.clear();
+    }
   }, [screen]);
   useEffect(() => {
     if (screen !== 'buttonHero') return;
@@ -224,10 +234,10 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   };
 
   // Tap Quest adapts its level from this child's recent Tap Quest games.
-  const startTapQuest = async (mode: TapQuestMode): Promise<'local' | null> => {
+  const startTapQuest = async (mode: TapQuestMode, aspectRatio: number): Promise<'local' | null> => {
     tapQuestSeed.current = tapQuestSeed.current === 0 ? Math.floor(Math.random() * 0x7fffffff) + 1
       : (tapQuestSeed.current + 1) & 0x7fffffff;
-    const game = tapQuestGame(mode, state.records, tapQuestSeed.current);
+    const game = tapQuestGame(mode, state.records, tapQuestSeed.current, undefined, aspectRatio);
     if (screenRef.current !== 'tapQuest') return null;
     tapQuest.start(game, { tickMs: 100 });
     return 'local';
@@ -292,11 +302,12 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   </View>;
   return withIntro(<View style={{ flex: 1, backgroundColor: theme.page }}>
     <Bubbles theme={theme} animated={state.bubbles} />
-    <SafeAreaView style={{ flex: 1 }}>
-    <StatusBar barStyle={state.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.page} />
+    {/* The header paints the strip behind the status bar itself, so it meets the top of the screen. */}
+    <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom']}>
+    <StatusBar barStyle={state.dark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
     {/* Short landscape windows get the slimmer header on game screens, leaving more room to play. */}
     <AppHeader theme={theme} compact={compact || (gameScreen && height < 820)} active={tab}
-      connection={state.connection} onTab={onTab} />
+      connection={state.connection} onTab={onTab} topInset={insets.top} />
     {screen === 'home' ? <View role="main" style={{ flex: 1, paddingHorizontal: compact ? 0 : 8 }}>
       {errorBanner && <View style={{ paddingHorizontal: 18, paddingTop: 16, width: '100%', maxWidth: 1164,
         alignSelf: 'center' }}>{errorBanner}</View>}
@@ -338,6 +349,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
               knobQuest.start(createKnobQuestGame(undefined, knobDifficulty, knobQuestSeed.current), { tickMs: 40 });
             }}
             renderPlayer={({ size, color }) => <Jimmy face size={size} color={color} />}
+            showTouchControls={state.connection !== 'connected'}
             onAxis={action => handleGameInput.current({ ...action, source: 'touch' })} />}
           {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
             durationS={timedMs / 1000} onDuration={seconds => choose('timed', String(seconds * 1000))}

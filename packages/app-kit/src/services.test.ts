@@ -99,6 +99,21 @@ describe('app services', () => {
     expect(fake.display.score).toEqual({ score: 2, best: 2, stars: 2 });
   });
 
+  it('lets a game started before the toy connected (or reconnected) hear it', async () => {
+    const { fake, services, time } = setup();
+    const optionalToyGame = defineGame<{ taps: number }>({ ...tapGame, id: 'optional-toy', needsToy: false });
+    const run = services.play(optionalToyGame);
+    await services.connection.connect();
+    fake.tap('clicker');
+    expect(run.getState().taps).toBe(1);
+    fake.dropConnection(new Error('out of range'));
+    await services.connection.connect();
+    fake.tap('clicker');
+    expect(run.getState().taps).toBe(2);
+    time.advance(10_000);
+    expect(await run.result).toMatchObject({ score: 2, deviceId: '00001234' });
+  });
+
   it('plays screen-only games with no toy', async () => {
     const { services, time } = setup();
     expect(services.canPlay(screenGame)).toBe(true);
@@ -179,6 +194,34 @@ describe('connecting with the child’s yes', () => {
     const restarted = createJimmyServices({ storage, connector, clock: time.clock, scheduler: time.scheduler });
     await restarted.connection.connect();
     expect(restarted.connection.getSnapshot().status).toBe('connected');
+  });
+
+  it('forgets the toy, so the next connection asks the child again', async () => {
+    const time = createManualTime(START_MS);
+    const fake = createFakeFidget({ clock: time.clock, approval: 'ask' });
+    const connector: ToyConnector = { kind: 'simulated', async connect() {
+      fake.reconnect();
+      return fake.transport;
+    } };
+    const storage = createMemoryKeyValueStore();
+    const services = createJimmyServices({ storage, connector, clock: time.clock, scheduler: time.scheduler });
+    const first = services.connection.connect();
+    await vi.waitFor(() => expect(fake.approvalRequest).not.toBeNull());
+    const firstId = fake.approvalRequest?.appId;
+    fake.answerApproval(true);
+    await first;
+
+    await services.forgetToy();
+    expect(services.connection.getSnapshot().status).toBe('disconnected');
+    const again = services.connection.connect();
+    await vi.waitFor(() => expect(services.connection.getSnapshot().status).toBe('awaitingApproval'));
+    const secondId = fake.approvalRequest?.appId;
+    expect(secondId).not.toBe(firstId);
+    fake.answerApproval(true);
+    await again;
+    expect(services.connection.getSnapshot().status).toBe('connected');
+    // Kept across restarts like any id.
+    expect(await storage.getItem('jimmyit.appId')).toBe(String(secondId));
   });
 
   it('reports a "no" on the toy as declined', async () => {

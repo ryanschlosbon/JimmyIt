@@ -32,6 +32,41 @@ describe('Tap Quest geometry and adaptation', () => {
   });
 });
 
+describe('Tap Quest on a wide board', () => {
+  it('spreads targets across the width and keeps circles round', async () => {
+    const square = await createGameTestHarness(createTapQuestGame({ mode: 'calm' }), { toy: false });
+    const wide = await createGameTestHarness(createTapQuestGame({ mode: 'calm', aspectRatio: 2 }), { toy: false });
+    const a = square.run.getState().target;
+    const b = wide.run.getState().target;
+    expect(wide.run.getState().aspectRatio).toBe(2);
+    expect(b?.x).toBeCloseTo((a?.x ?? 0) * 2);
+    expect(b?.y).toBe(a?.y);
+    expect(b?.radius).toBe(a?.radius);
+
+    // A touch one radius to the right of the center, in board heights, still hits: the circle is round on screen.
+    const target = b ?? { x: 0, y: 0, radius: 0 };
+    wide.run.submit(touch({ x: (target.x + target.radius * 0.95) / 2, y: target.y }));
+    expect(wide.run.getState().matchedCount).toBe(1);
+  });
+
+  it('misses a touch that is a radius away in board widths but not in heights', async () => {
+    const wide = await createGameTestHarness(createTapQuestGame({ mode: 'calm', aspectRatio: 2 }), { toy: false });
+    const target = wide.run.getState().target ?? { x: 0, y: 0, radius: 0 };
+    wide.run.submit(touch({ x: target.x / 2 + target.radius * 1.5, y: target.y })); // 3 radii away on screen
+    expect(wide.run.getState().matchedCount).toBe(0);
+  });
+
+  it('stretches trace paths sideways and rejects impossible shapes', async () => {
+    const square = await createGameTestHarness(createTapQuestGame({ mode: 'trace', patternSeed: 3 }), { toy: false });
+    const wide = await createGameTestHarness(createTapQuestGame({ mode: 'trace', patternSeed: 3, aspectRatio: 1.6 }),
+      { toy: false });
+    const xs = (points: readonly { x: number }[]) => points.map(point => point.x);
+    expect(xs(wide.run.getState().path)).toEqual(xs(square.run.getState().path).map(x => x * 1.6));
+    expect(() => createTapQuestGame({ mode: 'calm', aspectRatio: 0.5 })).toThrow(RangeError);
+    expect(() => createTapQuestGame({ mode: 'calm', aspectRatio: 3 })).toThrow(RangeError);
+  });
+});
+
 describe('Tap Quest sessions', () => {
   it('varies all four mode patterns between plays with reproducible seeds', async () => {
     for (const mode of ['precision', 'calm', 'trace', 'memory'] as const) {

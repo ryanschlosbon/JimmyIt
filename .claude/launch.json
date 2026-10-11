@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "jimmy-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "-w", "@jimmyit/mobile", "--", "--port", "8093"],
+      "port": 8093,
+      "autoPort": false
+    }
+  ]
+}

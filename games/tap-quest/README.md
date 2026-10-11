@@ -9,7 +9,10 @@ Tap Quest practices stylus control, hand-eye coordination, sequencing, and atten
 - **Memory:** preview highlighted circles one at a time, then repeat the order using the visible choices. `replaySequence` offers another look.
 - **Calm:** explore circles without a timer. The child chooses when to finish.
 
-The view sends normalized `0..1` coordinates via `run.submit({ type: 'touch', phase: 'down' | 'move' | 'up', point })`.
+The view sends normalized `0..1` coordinates (fractions of the board's width and height) via
+`run.submit({ type: 'touch', phase: 'down' | 'move' | 'up', point })`. The board can be wider than tall:
+`aspectRatio` (width ÷ height, 1 to 2.5, default 1) spreads targets and paths sideways, and the state's positions
+and radii are then in board heights (x from 0 to `aspectRatio`), so circles stay round and hits stay fair.
 It can draw `run.getState().target` or `path`, respect `paused`, and render the countdown and progress.
 For Memory Mode, draw `target` only in the preview phase, and draw `choices` without a highlighted answer during recall.
 `pause` and `resume` freeze game time. `restart` resets the target sequence while retaining earned points because scores never decrease.
@@ -29,7 +32,7 @@ No cloud service or device connection is needed for the rules (`needsToy: false`
 The standard game runner saves exactly one `ScoreRecord` per finished run through `ScoreRepository`. Each record
 carries the metric `level`, so the app can continue at the child's level next time.
 
-In the app: `apps/mobile/src/screens/TapQuestScreen.tsx` (mode picker, square play area, pause / finish) and
+In the app: `apps/mobile/src/screens/TapQuestScreen.tsx` (mode picker, a wide play area that fills the screen, pause / finish stacked beside it) and
 `tapQuestGame(mode, records, patternSeed)` in `apps/mobile/src/games.ts`, which starts at the child's last level for that mode and
 passes their last five games to the adaptation. The runner's own `pause()` (used when the app goes to the background,
 or when the stylus goes back into the toy) also freezes Tap Quest's timers.

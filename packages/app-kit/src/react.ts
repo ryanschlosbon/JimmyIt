@@ -40,12 +40,15 @@ export interface ConnectionControls extends ConnectionSnapshot {
   readonly connect: ConnectionManager['connect'];
   readonly disconnect: ConnectionManager['disconnect'];
   readonly clearError: ConnectionManager['clearError'];
+  /** Disconnects and makes the toy ask the child "connect?" again next time (see JimmyServices.forgetToy). */
+  readonly forget: JimmyServices['forgetToy'];
 }
 
 export function useConnection(): ConnectionControls {
-  const { connection } = useJimmyServices();
+  const { connection, forgetToy } = useJimmyServices();
   const snapshot = useSyncExternalStore(connection.subscribe, connection.getSnapshot, connection.getSnapshot);
-  return { ...snapshot, connect: connection.connect, disconnect: connection.disconnect, clearError: connection.clearError };
+  return { ...snapshot, connect: connection.connect, disconnect: connection.disconnect, clearError: connection.clearError,
+    forget: forgetToy };
 }
 
 /** Live toy state (switches, spinner, screw, battery…), or null when no toy is connected. */

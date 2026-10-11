@@ -1,6 +1,8 @@
 import { createAppScoreRecord, createMemoryKeyValueStore, createScoreRepository, type ScoreEvent } from '@jimmyit/core';
 import { describe, expect, it, vi } from 'vitest';
 import { defineGame } from './define-game';
+import { startGame } from './game-runner';
+import type { GameDevice } from './game-types';
 import { createGameTestHarness } from './testing';
 
 const tapGame = defineGame<null>({
@@ -101,5 +103,46 @@ describe('the toy during an app game', () => {
     const { h } = await withBest(0);
     await h.run.quit();
     await vi.waitFor(() => expect(h.fidget.mode).toBe('standalone'));
+  });
+});
+
+describe('a toy that comes and goes during a game', () => {
+  it('hears a toy that connects after the game started, and lets go of one that drops', async () => {
+    // The harness's game runs without the toy; its connected client stands in for one that shows up later.
+    const h = await createGameTestHarness(tapGame, { toy: false });
+    let toy: GameDevice | null = null;
+    const listeners = new Set<() => void>();
+    const changed = () => listeners.forEach((listener) => listener());
+    const run = startGame(tapGame, {
+      repository: h.repository,
+      devices: { current: () => toy, onChange: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      } },
+    });
+
+    h.fidget.tap('clicker');
+    expect(run.getScore().score).toBe(0);
+
+    toy = h.client;
+    changed();
+    expect(h.fidget.mode).toBe('app'); // handed the toy's screen as it arrives
+    h.fidget.tap('clicker');
+    expect(run.getScore().score).toBe(40);
+
+    toy = null;
+    changed();
+    h.fidget.tap('clicker');
+    expect(run.getScore().score).toBe(40);
+
+    toy = h.client; // reconnects: heard again
+    changed();
+    h.fidget.tap('clicker');
+    expect(run.getScore().score).toBe(80);
+
+    await run.quit();
+    expect(listeners.size).toBe(0);
+    h.fidget.tap('clicker');
+    expect(run.getScore().score).toBe(80);
   });
 });

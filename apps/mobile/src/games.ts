@@ -42,7 +42,7 @@ const MAX_TAP_QUEST_LEVEL = 5;
  * `records` is newest first, as useScores() returns them.
  */
 export function tapQuestGame(mode: TapQuestMode, records: readonly ScoreRecord[], patternSeed = 0,
-  patternPositions?: readonly Point[]) {
+  patternPositions?: readonly Point[], aspectRatio?: number) {
   const mine = records.filter((record) => record.gameId === `tap-quest-${mode}`).slice(0, 5).reverse();
   const lastLevel = mine[mine.length - 1]?.metrics.level ?? 1;
   const recentAttempts: RecentAttempt[] = mine
@@ -52,7 +52,8 @@ export function tapQuestGame(mode: TapQuestMode, records: readonly ScoreRecord[]
       completionRate: Math.min(1, (record.metrics.completionPercent ?? 0) / 100),
     }));
   const level = Math.max(1, Math.min(MAX_TAP_QUEST_LEVEL, Math.round(lastLevel)));
-  return createTapQuestGame({ mode, level, recentAttempts, patternSeed, patternPositions });
+  return createTapQuestGame({ mode, level, recentAttempts, patternSeed, patternPositions,
+    ...(aspectRatio === undefined ? {} : { aspectRatio }) });
 }
 
 /** Titles and facts for menus and scoreboards, including games the toy plays by itself. */

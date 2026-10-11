@@ -20,9 +20,22 @@ import {
 } from '@jimmyit/core';
 import type { GameDefinition, GameDevice, GameSession } from './game-types';
 
+/** Where a game finds the toy when the toy can connect, reconnect or drop while the game runs. */
+export interface GameDeviceSource {
+  /** The toy right now, or null. */
+  current(): GameDevice | null;
+  /** Called when the toy may have changed (connected, reconnected or dropped). */
+  onChange(listener: () => void): Unsubscribe;
+}
+
 export interface StartGameOptions {
   /** The connected toy, or null for screen-only games played without one. */
   readonly device?: GameDevice | null;
+  /**
+   * Follows the toy as it connects, reconnects or drops during the game, so a game started before the toy was
+   * ready still hears it. Takes the place of `device`.
+   */
+  readonly devices?: GameDeviceSource;
   readonly repository: ScoreRepository;
   readonly clock?: Clock;
   readonly scheduler?: Scheduler;
@@ -79,10 +92,14 @@ export function startGame<TState, TAction = never>(
   game: GameDefinition<TState, TAction>, options: StartGameOptions,
 ): GameRun<TState, TAction> {
   const { repository } = options;
-  const device = options.device ?? null;
+  const fixedDevice = options.device ?? null;
+  const devices: GameDeviceSource = options.devices ?? { current: () => fixedDevice, onChange: () => () => undefined };
+  // Always the toy connected right now, which may not be the one the game started with.
+  const device = (): GameDevice | null => devices.current();
   const clock = options.clock ?? systemClock;
   const scheduler = options.scheduler ?? systemScheduler;
-  const useDisplay = (options.useFidgetDisplay ?? true) && device !== null;
+  const showsOnToy = options.useFidgetDisplay ?? true;
+  const useDisplay = () => showsOnToy && device() !== null;
   const onDeviceError = options.onDeviceError ?? (() => undefined);
 
   const startedAtMs = clock.now();
@@ -90,7 +107,9 @@ export function startGame<TState, TAction = never>(
   const changes = createEmitter<void>();
   const scoreEvents = createEmitter<ScoreEvent>();
   // The toy plays its own animation and haptic for each moment, when it can.
-  const toyCelebrates = device?.info.capabilities.has('scoreEvents') ?? false;
+  const toyCelebrates = () => device()?.info.capabilities.has('scoreEvents') ?? false;
+  // The toy this game last played with, for its record.
+  let deviceId: GameDevice['info']['deviceId'] | null = null;
   let tracker: ScoreEventTracker | null = null;
   let pendingToyPoints: { score: number; value: number } | null = null;
   let lastToyPointsMs = Number.NEGATIVE_INFINITY;
@@ -120,15 +139,15 @@ export function startGame<TState, TAction = never>(
 
   const session: GameSession = {
     score,
-    getInput: () => device?.getState() ?? INITIAL_FIDGET_STATE,
+    getInput: () => device()?.getState() ?? INITIAL_FIDGET_STATE,
     elapsedMs,
-    feedback: (name) => toDevice(device?.feedback(name)),
-    haptic: (...effects) => toDevice(device?.haptic(...effects)),
+    feedback: (name) => toDevice(device()?.feedback(name)),
+    haptic: (...effects) => toDevice(device()?.haptic(...effects)),
     showOnFidget: (line, text) => {
-      if (useDisplay) toDevice(device?.showText(line, text));
+      if (useDisplay()) toDevice(device()?.showText(line, text));
     },
     showProgressOnFidget: (percent, label) => {
-      if (useDisplay) toDevice(device?.showProgress(percent, label));
+      if (useDisplay()) toDevice(device()?.showProgress(percent, label));
     },
     finish: () => end(true),
   };
@@ -136,8 +155,9 @@ export function startGame<TState, TAction = never>(
   const logic = game.create(session);
 
   function flushToyPoints(): void {
-    if (!pendingToyPoints || !device) return;
-    toDevice(device.sendScoreEvent({ kind: 'points', ...pendingToyPoints }));
+    const toy = device();
+    if (!pendingToyPoints || !toy) return;
+    toDevice(toy.sendScoreEvent({ kind: 'points', ...pendingToyPoints }));
     pendingToyPoints = null;
     lastToyPointsMs = clock.now();
   }
@@ -146,14 +166,15 @@ export function startGame<TState, TAction = never>(
     const event: ScoreEvent = { ...draft, gameId: game.id, source: 'app' };
     scoreEvents.emit(event);
     options.onScoreEvent?.(event);
-    if (!toyCelebrates || !device) return;
+    const toy = device();
+    if (!toy || !toyCelebrates()) return;
     if (draft.kind === 'points') {
       pendingToyPoints = { score: draft.score, value: (pendingToyPoints?.value ?? 0) + draft.value };
       if (clock.now() - lastToyPointsMs >= TOY_POINTS_EVENT_GAP_MS) flushToyPoints();
       return;
     }
     flushToyPoints();
-    toDevice(device.sendScoreEvent(draft));
+    toDevice(toy.sendScoreEvent(draft));
   }
 
   /** Turns score changes into events; call after anything that may have scored. */
@@ -179,7 +200,7 @@ export function startGame<TState, TAction = never>(
     previousBest = (await repository.best(game.id))?.score ?? 0;
     record = createAppScoreRecord({
       gameId: game.id,
-      deviceId: device?.info.deviceId ?? null,
+      deviceId: device()?.info.deviceId ?? deviceId,
       startedAtMs,
       durationMs: finalElapsedMs,
       snapshot,
@@ -198,9 +219,9 @@ export function startGame<TState, TAction = never>(
       const saved = await buildRecord();
       await repository.save(saved); // same id every attempt, so a retry can never double-save
       saveStatus = 'saved';
-      if (useDisplay) toDevice(device?.showScore({ score: saved.score, best: Math.max(previousBest, saved.score), stars: saved.stars }));
+      if (useDisplay()) toDevice(device()?.showScore({ score: saved.score, best: Math.max(previousBest, saved.score), stars: saved.stars }));
       // Toys with score events already celebrated the gameEnd event.
-      if (completedRun && !toyCelebrates) toDevice(device?.feedback(saved.newBest ? 'celebrate' : 'success'));
+      if (completedRun && !toyCelebrates()) toDevice(device()?.feedback(saved.newBest ? 'celebrate' : 'success'));
       resolveResult(saved);
       return saved;
     } catch (error) {
@@ -227,28 +248,45 @@ export function startGame<TState, TAction = never>(
     save()
       .catch(() => undefined)
       .then(() => {
-        if (useDisplay) toDevice(device?.setMode('standalone'));
+        if (useDisplay()) toDevice(device()?.setMode('standalone'));
       });
   }
 
-  if (useDisplay) {
-    toDevice(device?.setMode('app'));
-    toDevice(device?.clearDisplay());
-  }
+  const onDeviceEvent = (event: Parameters<Parameters<GameDevice['onEvent']>[0]>[0]): void => {
+    if (status !== 'running') return;
+    // Input that arrives after the deadline (a late tick) ends the game instead of scoring.
+    if (timeIsUp()) {
+      end(true);
+      return;
+    }
+    logic.onEvent?.(event);
+    checkScore();
+    changes.emit();
+  };
 
-  const stopEvents = device
-    ? device.onEvent((event) => {
-        if (status !== 'running') return;
-        // Input that arrives after the deadline (a late tick) ends the game instead of scoring.
-        if (timeIsUp()) {
-          end(true);
-          return;
-        }
-        logic.onEvent?.(event);
-        checkScore();
-        changes.emit();
-      })
-    : () => undefined;
+  // Listens to whichever toy is connected now. A toy that arrives mid-game is wired in and handed the screen.
+  let attached: GameDevice | null = null;
+  let detach: Unsubscribe = () => undefined;
+  function attach(): void {
+    const next = device();
+    if (next === attached) return;
+    detach();
+    attached = next;
+    detach = next ? next.onEvent(onDeviceEvent) : () => undefined;
+    if (!next) return;
+    deviceId = next.info.deviceId;
+    if (showsOnToy && status !== 'finished') {
+      toDevice(next.setMode('app'));
+      toDevice(next.clearDisplay());
+    }
+  }
+  attach();
+  const stopWatching = devices.onChange(attach);
+  const stopEvents = (): void => {
+    stopWatching();
+    detach();
+    attached = null;
+  };
 
   const cancelTick = scheduler.every(options.tickMs ?? DEFAULT_TICK_MS, () => {
     if (status !== 'running') return;

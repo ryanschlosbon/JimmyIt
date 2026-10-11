@@ -139,6 +139,8 @@ export function useJimmy() {
     connectorKind: connection.connectorKind,
     connect: () => { connection.connect().catch(() => undefined); },
     disconnect: () => { connection.disconnect().catch(() => undefined); },
+    /** Disconnects and makes Jimmy ask "connect?" again next time, for showing the approval step. */
+    forget: () => { connection.forget().catch(() => undefined); },
     toyName: nickname ?? (connection.info ? `Jimmy ${connection.info.deviceId.slice(-4).toUpperCase()}` : 'Jimmy'),
     renameToy, resetToyName,
     batteryPercent: toy?.batteryPercent ?? null,

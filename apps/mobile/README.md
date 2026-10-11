@@ -50,14 +50,18 @@ needs a development or release build.
   grow from real toy moves in timed practice (and spins from Spin Count on the toy). Games played on the
   toy without the app sync in and count too. The app never invents sample score records.
 - **Tap Quest:** stylus game with Precision, Trace, Memory and Calm modes (`@jimmyit/game-tap-quest`).
-  Difficulty continues from the child's last Tap Quest games. With the toy connected, the screen asks the
-  child to take the stylus out of Jimmy, and pauses if it goes back in; Jimmy celebrates the score moments.
+  Difficulty continues from the child's last Tap Quest games. The play area fills the screen as a wide
+  rectangle, with progress and the Pause / Finish now buttons stacked beside it. If the stylus is in Jimmy,
+  the screen asks the child to take it out, and pauses if it goes back in; Jimmy celebrates the score moments.
 - **Timed practice:** 30-, 60-, or 90-second practice sessions that count every move on
   the toy (the demo buttons press the virtual toy). Five points per move, with ten points
   of partial credit for an empty attempt. Pause, resume, and finish early without penalties.
-  Leaving the screen or switching apps pauses the session. Completed sessions use stable
+  Switching apps pauses the session. Completed sessions use stable
   IDs and the shared score repository, including retry after a storage error.
-- **Settings:** find / cancel / disconnect / reconnect, the toy's real name and battery,
+- **Leaving a game** (Timed Run, Tap Quest, Button Hero, Knob Quest) ends its run, keeping every point, and the
+  screen starts fresh next time; only the game on screen ever runs and holds the toy. Drawings keep their draft.
+- **Settings:** find / cancel / disconnect / reconnect / **Forget Jimmy** (Jimmy asks "connect?" again next time,
+  for demos), the toy's real name and battery,
   cancellable calibration, and Look & feel: light / dark mode, floating bubbles on / off, and the
   color style (Classic or Calm). All three are saved on the device. Connection starts disconnected
   after a reload. Calibration never changes real hardware values.

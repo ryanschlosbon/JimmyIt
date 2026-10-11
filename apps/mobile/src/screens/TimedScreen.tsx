@@ -40,7 +40,7 @@ export function TimedScreen({ theme, timed, onStart, durationS, onDuration, conn
   const remainingMs = timed.remainingMs ?? durationS * 1000;
   const runDurationMs = active || status === 'finished' ? timed.elapsedMs + remainingMs : durationS * 1000;
 
-  // Leaving the screen or switching apps pauses practice; points are never lost.
+  // Switching apps pauses practice (leaving the screen ends it, in App.tsx); points are never lost.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => { if (next !== 'active') pause(); });
     return () => { subscription.remove(); pause(); };
@@ -69,7 +69,8 @@ export function TimedScreen({ theme, timed, onStart, durationS, onDuration, conn
       <Icon name="bluetooth" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {virtualToy ? 'Virtual toy · The buttons below press the simulated Jimmy. Open “Toy” for every control.'
-          : 'Press, spin, twist, slide — every move on Jimmy counts. Leaving this screen pauses practice.'}
+          : 'Press, spin, twist, slide — every move on Jimmy counts. Leaving this screen ends practice and '
+            + 'keeps your points.'}
       </Body></View>
     </View>
     <View style={{ flex: 1, minHeight: 0, flexDirection: wide ? 'row' : 'column', gap: SPACE.md }}>

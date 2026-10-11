@@ -3,6 +3,7 @@
 export type { MotorSkill, GameSession, GameLogic, GameDefinition, GameDevice } from './game-types';
 export { defineGame, GameDefinitionError } from './define-game';
 export {
+  type GameDeviceSource,
   type GameRun,
   type GameStatus,
   type SaveStatus,

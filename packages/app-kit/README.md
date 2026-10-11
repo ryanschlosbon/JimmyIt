@@ -38,7 +38,7 @@ Nothing else changes between them. `apps/mobile/src/toy-connector.ts` makes the 
 
 | Hook | Gives you | Typical screen |
 | --- | --- | --- |
-| `useConnection()` | `status` (`disconnected` / `searching` / `awaitingApproval` / `connected`), `info` (toy id, firmware), `lastSync`, `error.kind`, `connect()`, `disconnect()`, `clearError()` | Settings, header pill |
+| `useConnection()` | `status` (`disconnected` / `searching` / `awaitingApproval` / `connected`), `info` (toy id, firmware), `lastSync`, `error.kind`, `connect()`, `disconnect()`, `forget()` (Jimmy asks the child again next time), `clearError()` | Settings, header pill |
 | `useToyState()` | Live toy state or `null`: switches, spinner angle, screw, `batteryPercent`, `charging` | Battery badge, live toy visualizer |
 | `useScoreEvents(fn)` | Every score moment (`gameStart`, `points`, `milestone`, `newBest`, `gameEnd`) from app games *and* games the toy plays by itself while connected | Sounds, mascot reactions, confetti |
 | `useCelebration()` | The big moment to show right now (`milestone`, `newBest`, `bestAtEnd`) or `null`; clears itself | An in-game celebration |

@@ -33,7 +33,8 @@ function DefaultPlayer({ size, color }: { readonly size: number; readonly color:
   </View>;
 }
 
-export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, onDifficulty, onStart, onAxis }: {
+export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, onDifficulty, onStart, onAxis,
+  showTouchControls = true }: {
   readonly state: KnobQuestState | null;
   readonly status: 'idle' | 'running' | 'paused' | 'finished';
   readonly difficulty: KnobQuestDifficulty;
@@ -42,6 +43,8 @@ export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, 
   readonly onDifficulty: (difficulty: KnobQuestDifficulty) => void;
   readonly onStart: () => void;
   readonly onAxis: (action: KnobQuestAction) => void;
+  /** On-screen arrows for playing without the toy. The app hides them while the toy is connected. */
+  readonly showTouchControls?: boolean;
 }) {
   const [area, setArea] = useState({ width: 0, height: 0 });
   const player = renderPlayer ?? ((props) => <DefaultPlayer {...props} />);
@@ -140,10 +143,10 @@ export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, 
       </Text>}
     </View>}
     {/* Touch controls do the same as the toy, for playing without Jimmy. */}
-    <View style={{ flexDirection: 'row', gap: 8 }}>
+    {showTouchControls && <View style={{ flexDirection: 'row', gap: 8 }}>
       {control('←', 'Roll left', 'horizontal', -1)}{control('→', 'Roll right', 'horizontal', 1)}
       {control('↑', 'Float up', 'vertical', -1)}{control('↓', 'Drop', 'vertical', 1)}
-    </View>
+    </View>}
   </View>;
 }
 
