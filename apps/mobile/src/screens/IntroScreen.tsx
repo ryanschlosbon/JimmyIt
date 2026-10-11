@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Image, Pressable, StyleSheet, Text, View, useWindowDimensions,
+import { AccessibilityInfo, Animated, Easing, Image, StyleSheet, View, useWindowDimensions,
   type EasingFunction } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_ARTWORK, INTRO_BACKGROUNDS, INTRO_LAYOUT } from '../artwork';
 import { ANIMATIONS, USE_NATIVE_DRIVER } from '../design/motion';
 
@@ -75,7 +74,6 @@ export function IntroScreen({ ready, onDone }: { readonly ready: boolean; readon
   const hop = useRef(new Animated.Value(0)).current;
   const squash = useRef(new Animated.Value(1)).current;
   const roll = useRef(new Animated.Value(0)).current;
-  const chrome = useRef(new Animated.Value(1)).current;
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
   const [loaded, setLoaded] = useState({ face: false, wordmark: false });
 
@@ -97,7 +95,6 @@ export function IntroScreen({ ready, onDone }: { readonly ready: boolean; readon
     hop.setValue(0);
     squash.setValue(1);
     roll.setValue(0);
-    chrome.setValue(1);
     const to = (value: Animated.Value, toValue: number, duration: number, easing?: EasingFunction) =>
       Animated.timing(value, { toValue, duration, easing, useNativeDriver: USE_NATIVE_DRIVER });
     const out = Easing.out(Easing.quad);
@@ -127,11 +124,11 @@ export function IntroScreen({ ready, onDone }: { readonly ready: boolean; readon
         restDisplacementThreshold: 0.005, useNativeDriver: USE_NATIVE_DRIVER }), // a jelly wobble
       Animated.delay(holdMs),
       to(roll, -0.03, 200, out), // lean back before rolling away
-      Animated.parallel([to(chrome, 0, 200), to(roll, 1, rollMs, Easing.in(Easing.sin))]),
+      to(roll, 1, rollMs, Easing.in(Easing.sin)),
     ]);
     animation.start(({ finished }) => { if (finished) onDone(); });
     return () => animation.stop();
-  }, [chrome, hop, iris, loaded.face, loaded.wordmark, onDone, ready, reduceMotion, roll, squash, stage]);
+  }, [hop, iris, loaded.face, loaded.wordmark, onDone, ready, reduceMotion, roll, squash, stage]);
 
   const { cx, cy, radius, faceSize, wordmark, ringPx, stripes } = geometry;
   const coral = INTRO_BACKGROUNDS.end;
@@ -176,17 +173,6 @@ export function IntroScreen({ ready, onDone }: { readonly ready: boolean; readon
         onLoad={() => setLoaded(current => ({ ...current, face: true }))}
         onError={() => setLoaded(current => ({ ...current, face: true }))}
         style={{ width: '100%', height: '100%' }} />
-    </Animated.View>
-    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { opacity: chrome }]}>
-      <SafeAreaView pointerEvents="box-none"
-        style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center', padding: 28, gap: 18 }}>
-        <Text style={{ fontSize: 24, fontWeight: '600', color: '#203858', textAlign: 'center' }}>Little moves. Big smiles.</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Skip intro" onPress={onDone}
-          style={({ pressed }) => ({ minHeight: 56, paddingHorizontal: 25, paddingVertical: 15,
-            borderRadius: 18, backgroundColor: '#FFFCF7', opacity: pressed ? .75 : 1 })}>
-          <Text style={{ fontSize: 18, fontWeight: '600', color: '#203858' }}>{ready ? 'Let’s play' : 'Skip intro'}</Text>
-        </Pressable>
-      </SafeAreaView>
     </Animated.View>
   </View>;
 }

@@ -41,7 +41,7 @@ Nothing else changes between them. `apps/mobile/src/toy-connector.ts` makes the 
 | `useConnection()` | `status` (`disconnected` / `searching` / `awaitingApproval` / `connected`), `info` (toy id, firmware), `lastSync`, `error.kind`, `connect()`, `disconnect()`, `clearError()` | Settings, header pill |
 | `useToyState()` | Live toy state or `null`: switches, spinner angle, screw, `batteryPercent`, `charging` | Battery badge, live toy visualizer |
 | `useScoreEvents(fn)` | Every score moment (`gameStart`, `points`, `milestone`, `newBest`, `gameEnd`) from app games *and* games the toy plays by itself while connected | Sounds, mascot reactions, confetti |
-| `useCelebration()` | The big moment to show right now (`milestone`, `newBest`, `bestAtEnd`) or `null`; clears itself | A celebration overlay |
+| `useCelebration()` | The big moment to show right now (`milestone`, `newBest`, `bestAtEnd`) or `null`; clears itself | An in-game celebration |
 | `useScores({ games })` | `records`, `progress` (points, level, badges), `scoreboard` (per-game bests, today, toy vs app), `loading`, `error` | Rewards, scoreboard, home stats |
 | `useGameRun()` | `start(game)`, `state`, `score`, `remainingMs`, `status`, `saveStatus`, `record`, `pause()`, `resume()`, `quit()`, `submit(action)`, `retrySave()`, `clear()` | Any game screen |
 
@@ -82,7 +82,7 @@ A "no" (or no answer) ends as `error.kind === 'declined'`.
 App games fire the same moments as the toy's own games (PROTOCOL.md "Score
 events"), and the toy plays its animation and haptic for each. You don't
 send anything: the runner watches the score. Screens just listen, with
-`useScoreEvents` or `useCelebration` (see `apps/mobile/src/components/CelebrationOverlay.tsx`).
+`useScoreEvents` or `useCelebration` (see `apps/mobile/src/components/GameScoreBar.tsx`).
 
 ### Wording is yours
 

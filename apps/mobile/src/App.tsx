@@ -28,7 +28,8 @@ import { DRAWING_GAMES, PLAY_SHELF, SHAPE_CHALLENGE_GAME, TIMED_PRACTICE_SECONDS
   type Activity, type ShelfGameId } from './games';
 import { createSessionShapeRecognizer } from './shape-recognition-service';
 import { createToySetup, loadDevToyPanel } from './toy-connector';
-import { CelebrationOverlay } from './components/CelebrationOverlay';
+import { CelebrationToast } from './components/CelebrationToast';
+import { GameScoreBar } from './components/GameScoreBar';
 import { PlayScreen } from './screens/PlayScreen';
 import { DrawingScreen } from './screens/DrawingScreen';
 import { RewardsScreen } from './screens/RewardsScreen';
@@ -290,6 +291,9 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const shapeState = drawingRuns.shapes.state;
   const shapeFeedback = shapeState?.lastResult?.target === shapeState?.target
     ? shapeState?.lastResult?.feedback : undefined;
+  const activityRuns = { timed, tapQuest, buttonHero, knobQuest } as const;
+  const activityScore = screen in activityRuns
+    ? activityRuns[screen as keyof typeof activityRuns].score?.score ?? 0 : null;
   const tab: HeaderTab = screen === 'rewards' ? 'rewards' : screen === 'settings' ? 'settings' : 'play';
   const onTab = (next: HeaderTab) => navigate(next === 'play' ? 'home' : next);
   const errorBanner = state.error && <View accessibilityRole="alert" style={{ backgroundColor: theme.softCoral,
@@ -318,6 +322,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
         {errorBanner}
         {isActivity(screen) && <Button theme={theme} label="All games" icon="chevronLeft" compact
           onPress={() => navigate('home')} style={{ alignSelf: 'flex-start', marginBottom: 18 }} />}
+        {activityScore !== null && <GameScoreBar theme={theme} score={activityScore} />}
         {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
           dispatch={dispatch} finish={finish} saving={(activity === 'shapes' && recognizingShape)
             || drawingRuns[activity].saveStatus === 'saving'}
@@ -378,7 +383,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
         </View>
       </View>
     </Modal>
-    <CelebrationOverlay theme={theme} />
+    <CelebrationToast theme={theme} />
     </SafeAreaView>
   </View>);
 }
