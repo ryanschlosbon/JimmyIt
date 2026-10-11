@@ -1,91 +1,206 @@
+import { useState, type ReactNode } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import type { KnobQuestAction } from './knob-input';
-import type { KnobQuestState, Rect } from './knob-quest';
-import type { KnobQuestDifficulty } from './knob-quest';
+import type { KnobQuestDifficulty, KnobQuestState, Rect } from './knob-quest';
 
 interface QuestTheme {
-  readonly text: string; readonly secondary: string; readonly ink: string;
-  readonly surface: string; readonly coral: string; readonly yellow: string;
-  readonly purple: string; readonly navy: string;
-  readonly banners: { readonly quest: { readonly background: string; readonly accent: string; readonly shadow: string };
-    readonly sky: { readonly background: string } };
+  readonly text: string; readonly secondary: string; readonly ink: string; readonly border: string;
+  readonly surface: string; readonly raised: string; readonly coral: string; readonly yellow: string;
+  readonly mint: string; readonly purple: string; readonly navy: string;
+  readonly banners: { readonly quest: { readonly background: string; readonly accent: string; readonly shadow: string } };
 }
 
-function block(rect: Rect, color: string, camera: { x: number; y: number; width: number; height: number }) {
-  return { position: 'absolute' as const, left: `${(rect.x - camera.x) / camera.width * 100}%` as const,
-    top: `${(rect.y - camera.y) / camera.height * 100}%` as const,
-    width: `${rect.width / camera.width * 100}%` as const,
-    height: `${rect.height / camera.height * 100}%` as const, backgroundColor: color, borderRadius: 5 };
+/** Draws the player. The app passes its Jimmy; `color` follows his lives (green, yellow, red). */
+export type KnobQuestPlayerRenderer = (props: { readonly size: number; readonly color: string }) => ReactNode;
+
+const CAMERA_WIDTH = 68;
+const CAMERA_HEIGHT = 44;
+const SPARK_MS = 480;
+const LAND_SQUASH_MS = 240;
+const RESPAWN_FADE_MS = 700;
+const SPARKS = [-150, -125, -100, -80, -55, -30, 200, 340].map((deg, i) => ({ deg, speed: 26 + (i % 3) * 8 }));
+
+/** A plain smiling face, used when no player renderer is given (tests, other apps). */
+function DefaultPlayer({ size, color }: { readonly size: number; readonly color: string }) {
+  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color,
+    alignItems: 'center', justifyContent: 'center', gap: size * 0.08 }}>
+    <View style={{ flexDirection: 'row', gap: size * 0.2 }}>
+      {[0, 1].map(eye => <View key={eye} style={{ width: size * 0.16, height: size * 0.2, borderRadius: size,
+        backgroundColor: '#7A0B5A' }} />)}
+    </View>
+    <View style={{ width: size * 0.36, height: size * 0.14, borderBottomWidth: 2, borderColor: '#7A0B5A',
+      borderBottomLeftRadius: size, borderBottomRightRadius: size }} />
+  </View>;
 }
 
-export function KnobQuestView({ state, status, difficulty, theme, onDifficulty, onStart, onAxis }: {
+export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, onDifficulty, onStart, onAxis }: {
   readonly state: KnobQuestState | null;
   readonly status: 'idle' | 'running' | 'paused' | 'finished';
   readonly difficulty: KnobQuestDifficulty;
   readonly theme: QuestTheme;
+  readonly renderPlayer?: KnobQuestPlayerRenderer;
   readonly onDifficulty: (difficulty: KnobQuestDifficulty) => void;
   readonly onStart: () => void;
   readonly onAxis: (action: KnobQuestAction) => void;
 }) {
   const { width: windowWidth } = useWindowDimensions();
-  const cameraWidth = state ? Math.min(68, state.level.width) : 68;
-  const cameraHeight = state ? Math.min(44, state.level.height) : 44;
+  const [areaWidth, setAreaWidth] = useState(0);
+  const player = renderPlayer ?? ((props) => <DefaultPlayer {...props} />);
+  const lifeColors = [theme.coral, theme.yellow, theme.mint];
+  const colorFor = (lives: number) => lifeColors[Math.max(0, Math.min(lifeColors.length - 1, lives - 1))] ?? theme.mint;
+  const running = status === 'running';
+  const areaHeight = Math.min(430, Math.max(240, windowWidth * 0.55));
+
+  const cameraWidth = state ? Math.min(CAMERA_WIDTH, state.level.width) : CAMERA_WIDTH;
+  const cameraHeight = state ? Math.min(CAMERA_HEIGHT, state.level.height) : CAMERA_HEIGHT;
   const camera = { x: state ? Math.max(0, Math.min(state.level.width - cameraWidth, state.x - cameraWidth * 0.35)) : 0,
-    y: state ? Math.max(0, Math.min(state.level.height - cameraHeight, state.y - cameraHeight * 0.55)) : 0,
-    width: cameraWidth, height: cameraHeight };
-  const control = (label: string, axis: 'horizontal' | 'vertical', value: number) =>
-    <Pressable key={label} accessibilityRole="button" accessibilityLabel={label}
+    y: state ? Math.max(0, Math.min(state.level.height - cameraHeight, state.y - cameraHeight * 0.55)) : 0 };
+  const sx = areaWidth / cameraWidth;
+  const sy = areaHeight / cameraHeight;
+  const box = (rect: Rect) => ({ position: 'absolute' as const, left: (rect.x - camera.x) * sx,
+    top: (rect.y - camera.y) * sy, width: rect.width * sx, height: rect.height * sy });
+
+  const control = (glyph: string, caption: string, axis: 'horizontal' | 'vertical', value: number) =>
+    <Pressable key={caption} accessibilityRole="button" accessibilityLabel={caption} disabled={!running}
       onPressIn={() => onAxis({ type: 'axis', axis, value })}
       onPressOut={() => onAxis({ type: 'axis', axis, value: 0 })}
-      style={({ pressed }) => ({ minWidth: 65, minHeight: 65, borderRadius: 14,
-        alignItems: 'center', justifyContent: 'center',
-        backgroundColor: pressed ? theme.banners.quest.accent : theme.surface })}>
-      <Text style={{ color: theme.ink, fontSize: 25, fontWeight: 'bold' }}>{label}</Text>
+      style={({ pressed }) => ({ minWidth: 76, minHeight: 72, borderRadius: 18, paddingHorizontal: 8,
+        alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.border,
+        backgroundColor: pressed ? theme.banners.quest.accent : theme.raised, opacity: running ? 1 : 0.6 })}>
+      <Text style={{ color: theme.text, fontSize: 26, fontWeight: 'bold' }}>{glyph}</Text>
+      <Text style={{ color: theme.secondary, fontSize: 13, fontWeight: 'bold' }}>{caption}</Text>
     </Pressable>;
-  return <View style={{ gap: 18, padding: 20, borderRadius: 24, backgroundColor: theme.banners.quest.background }}>
-    <Text style={{ color: theme.text, fontSize: 32, fontWeight: 'bold' }}>Knob Quest</Text>
-    <Text style={{ color: theme.secondary, fontSize: 16 }}>Turn faster to climb against gravity. Find gems and reach the flag!</Text>
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      {(['easy', 'normal', 'hard'] as const).map((choice) => <Pressable key={choice}
-        accessibilityRole="button" accessibilityState={{ selected: difficulty === choice }}
-        onPress={() => onDifficulty(choice)} style={{ padding: 12, borderRadius: 12,
-          backgroundColor: difficulty === choice ? theme.banners.quest.accent : theme.surface }}>
-        <Text style={{ color: difficulty === choice ? theme.ink : theme.text, fontWeight: 'bold' }}>{choice}</Text>
-      </Pressable>)}
-    </View>
-    {status !== 'running' && <Pressable accessibilityRole="button" onPress={onStart}
-      style={{ padding: 15, borderRadius: 14, backgroundColor: theme.banners.quest.accent, alignSelf: 'flex-start' }}>
-      <Text style={{ color: theme.ink, fontSize: 18, fontWeight: 'bold' }}>{status === 'finished' ? 'New route' : 'Start'}</Text>
-    </Pressable>}
-    {state && <>
-      <Text style={{ color: theme.text }}>Gems {state.collected.length}/{state.level.gems.length}  ·  Score {state.score}
-        {'  ·  '}Restarts {state.checkpoints}{state.checkpointReached ? '  ·  Checkpoint reached' : ''}</Text>
-      <View style={{ width: '100%', height: Math.min(430, windowWidth * 0.6),
-        backgroundColor: theme.banners.sky.background, borderRadius: 14, overflow: 'hidden' }}>
-        {state.level.platforms.map((rect, index) => <View key={`p${index}`}
-          style={block(rect, theme.banners.quest.shadow, camera)} />)}
-        {state.level.hazards.map((rect, index) => <View key={`h${index}`}
-          style={block(rect, theme.coral, camera)} />)}
-        {state.level.gems.map((rect, index) => state.collected.includes(index) ? null : <View key={`g${index}`}
-          style={block(rect, theme.yellow, camera)} />)}
-        {state.fireballs.map((rect, index) => <View key={`f${index}`}
-          style={{ ...block(rect, theme.coral, camera), borderRadius: 50 }} />)}
-        {state.level.checkpoint && <View accessibilityLabel="Checkpoint flag"
-          style={block({ ...state.level.checkpoint, width: 2, height: 7 }, theme.purple, camera)} />}
-        <View style={block(state.level.goal, theme.purple, camera)} />
-        <View accessibilityLabel={`Explorer at ${Math.round(state.x)}, ${Math.round(state.y)}`}
-          style={block({ x: state.x, y: state.y, width: state.width, height: state.height },
-          theme.navy, camera)} />
+
+  return <View style={{ gap: 16, padding: 20, borderRadius: 24, backgroundColor: theme.banners.quest.background,
+    borderWidth: 2, borderColor: theme.border }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <View style={{ gap: 4, flexShrink: 1 }}>
+        <Text accessibilityRole="header" style={{ color: theme.text, fontSize: 32, fontWeight: 'bold' }}>Knob Quest</Text>
+        <Text style={{ color: theme.secondary, fontSize: 16 }}>
+          Roll Jimmy to the flag. Spin to roll, turn the screw to float up. Faster turns push harder!
+        </Text>
       </View>
-      {state.completed && <Text style={{ color: theme.text, fontSize: 22 }}>You reached the finish!</Text>}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-        <View style={{ flexDirection: 'row', gap: 7 }}>
-          {control('←', 'horizontal', -1)}{control('→', 'horizontal', 1)}
+      {state && <View accessibilityLabel={`${state.lives} of ${state.maxLives} lives`}
+        style={{ flexDirection: 'row', gap: 6, padding: 8, borderRadius: 18, backgroundColor: theme.raised }}>
+        {Array.from({ length: state.maxLives }, (_, i) => <View key={i} style={{ opacity: i < state.lives ? 1 : 0.25 }}>
+          {player({ size: 30, color: i < state.lives ? colorFor(state.lives) : theme.secondary })}
+        </View>)}
+      </View>}
+    </View>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {(['easy', 'normal', 'hard'] as const).map((choice) => {
+        const selected = difficulty === choice;
+        return <Pressable key={choice} accessibilityRole="button" accessibilityLabel={`${choice} difficulty`}
+          accessibilityState={{ selected, disabled: running }} disabled={running} onPress={() => onDifficulty(choice)}
+          style={{ minHeight: 56, paddingHorizontal: 16, borderRadius: 16, justifyContent: 'center',
+            borderWidth: selected ? 2.5 : 1.5, borderColor: selected ? theme.ink : theme.border,
+            backgroundColor: selected ? theme.banners.quest.accent : theme.raised }}>
+          <Text style={{ color: selected ? theme.ink : theme.text, fontSize: 16, fontWeight: 'bold' }}>
+            {selected ? '✓ ' : ''}{choice}
+          </Text>
+        </Pressable>;
+      })}
+      {!running && <Pressable accessibilityRole="button" onPress={onStart}
+        style={{ minHeight: 56, paddingHorizontal: 22, borderRadius: 28, justifyContent: 'center',
+          backgroundColor: theme.banners.quest.accent }}>
+        <Text style={{ color: theme.ink, fontSize: 18, fontWeight: 'bold' }}>{status === 'finished' ? 'New route' : 'Start'}</Text>
+      </Pressable>}
+    </View>
+
+    {state && <>
+      <View onLayout={(event) => setAreaWidth(event.nativeEvent.layout.width)}
+        style={{ width: '100%', height: areaHeight, backgroundColor: theme.raised, borderRadius: 18,
+          borderWidth: 2, borderColor: theme.border, overflow: 'hidden' }}>
+        {areaWidth > 0 && <World state={state} theme={theme} box={box} sx={sx} sy={sy} camera={camera}
+          player={player} color={colorFor(state.lives)} />}
+      </View>
+      <View accessibilityLiveRegion="polite" style={{ minHeight: 30, justifyContent: 'center' }}>
+        {state.completed ? <Text style={{ color: theme.text, fontSize: 22, fontWeight: 'bold' }}>
+          Jimmy made it to the flag! {state.score} points.
+        </Text> : state.outOfLives ? <Text style={{ color: theme.text, fontSize: 22, fontWeight: 'bold' }}>
+          Jimmy needs a little rest! You scored {state.score} points. Try a new route?
+        </Text> : <Text style={{ color: theme.secondary, fontSize: 16 }}>
+          {state.checkpointReached ? 'Checkpoint reached! Jimmy will come back here.' : 'Land on platforms for points.'}
+        </Text>}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {control('←', 'Roll left', 'horizontal', -1)}{control('→', 'Roll right', 'horizontal', 1)}
         </View>
-        <View style={{ flexDirection: 'row', gap: 7 }}>
-          {control('↑', 'vertical', -1)}{control('↓', 'vertical', 1)}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {control('↑', 'Float up', 'vertical', -1)}{control('↓', 'Drop', 'vertical', 1)}
         </View>
       </View>
     </>}
   </View>;
+}
+
+/** The level around Jimmy. Every moving part is worked out from game time, so it needs no timers. */
+function World({ state, theme, box, sx, sy, camera, player, color }: {
+  readonly state: KnobQuestState; readonly theme: QuestTheme; readonly box: (rect: Rect) => object;
+  readonly sx: number; readonly sy: number; readonly camera: { readonly x: number; readonly y: number };
+  readonly player: KnobQuestPlayerRenderer; readonly color: string;
+}) {
+  const { level } = state;
+  const floorTop = level.height - 4;
+  const size = state.width * sx;
+  const now = state.elapsedMs;
+
+  // Squash and stretch: long while flying fast, flat for a moment after landing.
+  const landT = now - state.landedAtMs;
+  const squash = landT < LAND_SQUASH_MS ? Math.min(0.35, Math.abs(state.landingSpeed) / 28 * 0.4) * (1 - landT / LAND_SQUASH_MS) : 0;
+  const stretch = state.grounded ? 0 : Math.min(0.22, Math.abs(state.verticalVelocity) / 28 * 0.22);
+  const scaleY = 1 - squash + stretch;
+  const scaleX = 1 + squash - stretch * 0.6;
+  const rollDeg = (state.x / (state.width / 2)) * (180 / Math.PI);
+  const respawnT = now - state.respawnedAtMs;
+  const fadeIn = respawnT < RESPAWN_FADE_MS ? 0.35 + 0.65 * (respawnT / RESPAWN_FADE_MS) : 1;
+  const sparkT = now - state.jumpedAtMs;
+  const sparkColors = [theme.yellow, theme.coral, theme.mint, theme.purple];
+  const px = (x: number) => (x - camera.x) * sx;
+  const py = (y: number) => (y - camera.y) * sy;
+
+  return <>
+    {level.holes.map((hole, index) => <View key={`hole${index}`} style={{ ...box({ ...hole, height: hole.height + 20 }),
+      backgroundColor: theme.navy, opacity: 0.35, borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />)}
+    {level.platforms.map((rect, index) => {
+      const floor = rect.y >= floorTop;
+      const landed = state.visited.includes(index);
+      return <View key={`p${index}`} style={{ ...box(rect), backgroundColor: theme.banners.quest.shadow,
+        borderRadius: floor ? 4 : 10, borderTopWidth: Math.max(3, sy * 0.8), overflow: 'hidden',
+        borderTopColor: floor || landed ? theme.mint : theme.yellow }} />;
+    })}
+    {level.checkpoint && <View accessibilityLabel={state.checkpointReached ? 'Checkpoint reached' : 'Checkpoint flag'}
+      style={{ position: 'absolute', left: px(level.checkpoint.x), top: py(level.checkpoint.y - 4), height: 8 * sy }}>
+      <View style={{ width: 3, height: '100%', backgroundColor: theme.navy, borderRadius: 2 }} />
+      <View style={{ position: 'absolute', left: 3, top: 0, width: 2.6 * sx, height: 2 * sy, borderTopRightRadius: 6,
+        borderBottomRightRadius: 6, backgroundColor: state.checkpointReached ? theme.mint : theme.secondary }} />
+    </View>}
+    <View accessibilityLabel="Finish flag" style={{ position: 'absolute', left: px(level.goal.x + 2),
+      top: py(level.goal.y - 6), height: (level.goal.height + 6) * sy }}>
+      <View style={{ width: 4, height: '100%', backgroundColor: theme.navy, borderRadius: 2 }} />
+      <View style={{ position: 'absolute', left: 4, top: 0, width: 4.5 * sx, height: 3 * sy, borderTopRightRadius: 10,
+        borderBottomRightRadius: 10, backgroundColor: theme.purple }} />
+    </View>
+    {state.fireballs.map((ball, index) => <View key={`f${index}`} style={{ ...box(ball), borderRadius: 999,
+      backgroundColor: theme.coral, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: '45%', height: '45%', borderRadius: 999, backgroundColor: theme.yellow }} />
+    </View>)}
+    {sparkT >= 0 && sparkT < SPARK_MS && SPARKS.map(({ deg, speed }, i) => {
+      const t = sparkT / 1000;
+      const radians = deg * Math.PI / 180;
+      const x = state.jumpedFrom.x + state.width / 2 + Math.cos(radians) * speed * t;
+      const y = state.jumpedFrom.y + state.height + Math.sin(radians) * speed * t + 30 * t * t;
+      return <View key={`s${i}`} pointerEvents="none" style={{ position: 'absolute', left: px(x) - 5, top: py(y) - 1.5,
+        width: 10, height: 3, borderRadius: 2, backgroundColor: sparkColors[i % sparkColors.length],
+        opacity: 1 - sparkT / SPARK_MS, transform: [{ rotate: `${deg}deg` }] }} />;
+    })}
+    <View accessibilityLabel={`Jimmy, ${state.lives} ${state.lives === 1 ? 'life' : 'lives'} left`}
+      style={{ position: 'absolute', left: px(state.x), top: py(state.y), width: size, height: size, opacity: fadeIn,
+        transform: [{ translateY: size * (1 - scaleY) / 2 }, { scaleX }, { scaleY }] }}>
+      <View style={{ width: size, height: size, transform: [{ rotate: `${rollDeg}deg` }] }}>
+        {player({ size, color })}
+      </View>
+    </View>
+  </>;
 }

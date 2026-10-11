@@ -1,9 +1,9 @@
-import type { ButtonHeroAction } from '@jimmyit/game-button-hero';
+import type { ButtonHeroAction, ButtonHeroMove } from '@jimmyit/game-button-hero';
 import type { KnobQuestAction } from '@jimmyit/game-knob-quest';
 
 export type GameInputSource = 'keyboard' | 'touch' | 'hardware';
 export type GameInputEvent =
-  | { readonly type: 'button'; readonly source: GameInputSource; readonly lane: number; readonly pressed: boolean }
+  | { readonly type: 'button'; readonly source: GameInputSource; readonly move: ButtonHeroMove; readonly pressed: boolean }
   | { readonly type: 'axis'; readonly source: GameInputSource; readonly axis: 'horizontal' | 'vertical';
       readonly value: number };
 
@@ -14,6 +14,6 @@ export interface GameInputProvider {
 
 export function dispatchGameInput(event: GameInputEvent,
   onButton: (action: ButtonHeroAction) => void, onAxis: (action: KnobQuestAction) => void): void {
-  if (event.type === 'button') onButton({ type: 'button', lane: event.lane, pressed: event.pressed });
+  if (event.type === 'button') onButton({ type: 'button', move: event.move, pressed: event.pressed });
   else onAxis({ type: 'axis', axis: event.axis, value: event.value });
 }

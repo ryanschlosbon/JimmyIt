@@ -353,6 +353,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
             knobQuest.start(createKnobQuestGame(undefined, knobDifficulty, knobQuestSeed.current), { tickMs: 40 });
             scroll.current?.scrollTo({ y: compact ? 220 : 240, animated: true });
           }}
+          renderPlayer={({ size, color }) => <Jimmy face size={size} color={color} />}
           onAxis={action => handleGameInput.current({ ...action, source: 'touch' })} />}
         {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
           durationS={timedMs / 1000} onDuration={seconds => choose('timed', String(seconds * 1000))}

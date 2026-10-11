@@ -57,6 +57,9 @@ games/<game-id>/
 
 - Generous tolerances and partial credit (`proximityPoints`). Scores only go
   up; no penalties, no "fail" screens or wording.
+  - Approved exception: Knob Quest has three lives. Running out ends the run
+    gently ("Jimmy needs a little rest!"), keeps every point, and never says
+    die, lose or fail. Any other game that wants lives needs the same approval.
 - Playable one-handed. If a game needs two controls at once, say so in its
   README and `skills`.
 - No flashing faster than 3 times a second, and no sudden loud or harsh
