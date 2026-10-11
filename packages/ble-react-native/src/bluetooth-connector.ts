@@ -1,6 +1,6 @@
 import { type FidgetTransport, type KeyValueStore, type Scheduler, systemScheduler } from '@jimmyit/core';
 import { FIDGET_SERVICE_UUID } from '@jimmyit/protocol';
-import type { BleDeviceLike, BleManagerLike } from './ble-plx-types';
+import type { BleDeviceLike, BleManagerLike, BleState } from './ble-plx-types';
 import { connectToFidget } from './ble-transport';
 
 export const LAST_TOY_STORAGE_KEY = 'jimmyit.lastToyId';
@@ -9,6 +9,14 @@ export class BluetoothPermissionError extends Error {
   override name = 'BluetoothPermissionError';
   constructor() {
     super('Bluetooth permission was not granted');
+  }
+}
+
+/** Bluetooth is off, unsupported, or never became ready. `state` is the last one seen. */
+export class BluetoothUnavailableError extends Error {
+  override name = 'BluetoothUnavailableError';
+  constructor(readonly state: BleState) {
+    super(`Bluetooth is not ready (${state})`);
   }
 }
 
@@ -28,6 +36,11 @@ export interface BluetoothConnectorOptions {
   readonly storage?: KeyValueStore;
   readonly scanTimeoutMs?: number;
   readonly connectTimeoutMs?: number;
+  /**
+   * How long to wait for Bluetooth to be ready. Long enough to answer iOS's
+   * permission prompt, which appears when the BleManager is created.
+   */
+  readonly readyTimeoutMs?: number;
   readonly scheduler?: Scheduler;
 }
 
@@ -44,6 +57,33 @@ export function createBluetoothConnector(options: BluetoothConnectorOptions): {
   const scheduler = options.scheduler ?? systemScheduler;
   const scanTimeoutMs = options.scanTimeoutMs ?? 12_000;
   const connectTimeoutMs = options.connectTimeoutMs ?? 8_000;
+  const readyTimeoutMs = options.readyTimeoutMs ?? 30_000;
+
+  // Scanning before the radio reports PoweredOn fails, and on iOS the state
+  // starts as Unknown for a moment after the BleManager is created.
+  function waitUntilPoweredOn(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      let last: BleState = 'Unknown';
+      const finish = (error: Error | null) => {
+        if (done) return;
+        done = true;
+        cancelTimeout();
+        // emitCurrentState can call back before onStateChange returns.
+        void Promise.resolve().then(() => subscription.remove());
+        if (error) reject(error);
+        else resolve();
+      };
+      const cancelTimeout = scheduler.after(readyTimeoutMs, () => finish(new BluetoothUnavailableError(last)));
+      const subscription = manager.onStateChange((state) => {
+        last = state;
+        if (state === 'PoweredOn') finish(null);
+        else if (state === 'Unauthorized') finish(new BluetoothPermissionError());
+        else if (state === 'PoweredOff' || state === 'Unsupported') finish(new BluetoothUnavailableError(state));
+        // Unknown and Resetting: an update is on its way.
+      }, true);
+    });
+  }
 
   function scanForFirstToy(): Promise<BleDeviceLike> {
     return new Promise((resolve, reject) => {
@@ -68,6 +108,7 @@ export function createBluetoothConnector(options: BluetoothConnectorOptions): {
     kind: 'bluetooth',
     async connect() {
       if (options.requestPermissions && !(await options.requestPermissions())) throw new BluetoothPermissionError();
+      await waitUntilPoweredOn();
       const lastToyId = await storage?.getItem(LAST_TOY_STORAGE_KEY).catch(() => null);
       if (lastToyId) {
         try {

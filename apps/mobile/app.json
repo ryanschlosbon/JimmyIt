@@ -5,6 +5,10 @@
     "version": "0.1.0",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.jimmyit.mobile",
+      "supportsTablet": true
+    },
     "android": {
       "package": "com.jimmyit.mobile"
     },

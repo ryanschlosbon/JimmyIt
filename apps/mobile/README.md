@@ -19,9 +19,14 @@ emulator or attach a device, then run:
 npm run android --workspace @jimmyit/mobile
 ```
 
-This prototype simulates Bluetooth and calibration. It never requests Bluetooth
-permissions or connects to real hardware. Expo Go can preview this UI; integrating
-`@jimmyit/ble-react-native` later requires a native development build.
+For an iPad (Xcode, a free Apple ID, the iPad plugged in), run
+`npx expo run:ios --device --configuration Release` from this folder.
+
+Development builds and the web preview use the virtual toy; release builds talk
+to the real toy over Bluetooth (see the table below). The app asks for Bluetooth
+permission the first time someone taps **Find Jimmy**, never at launch.
+Calibration is still a simulation. Expo Go can preview the UI, but Bluetooth
+needs a development or release build.
 
 ## Screens and state
 

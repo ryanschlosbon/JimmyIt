@@ -30,7 +30,12 @@ export interface BleDeviceLike {
   cancelConnection(): Promise<BleDeviceLike>;
 }
 
+/** react-native-ble-plx's `State` values. */
+export type BleState = 'Unknown' | 'Resetting' | 'Unsupported' | 'Unauthorized' | 'PoweredOff' | 'PoweredOn';
+
 export interface BleManagerLike {
+  /** With emitCurrentState, the listener also gets the state right now. */
+  onStateChange(listener: (state: BleState) => void, emitCurrentState?: boolean): BleSubscription;
   startDeviceScan(
     uuids: string[] | null,
     options: object | null,

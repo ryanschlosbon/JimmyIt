@@ -15,10 +15,23 @@ async function requestBluetoothPermissions(): Promise<boolean> {
   return permissions.every(permission => results[permission] === PermissionsAndroid.RESULTS.GRANTED);
 }
 
-let manager: BleManager | null = null;
+let connector: ToyConnector | null = null;
 
-/** The Bluetooth connector for the real toy (one BleManager per app run). */
+/**
+ * The Bluetooth connector for the real toy (one BleManager per app run). The
+ * BleManager is created on the first connect, not at launch: creating it is
+ * what makes iOS ask for Bluetooth permission, and that should follow "Find Jimmy".
+ */
 export function createToyBluetoothConnector(): ToyConnector | null {
-  manager ??= new BleManager();
-  return createBluetoothConnector({ manager, storage: AsyncStorage, requestPermissions: requestBluetoothPermissions });
+  return {
+    kind: 'bluetooth',
+    connect() {
+      connector ??= createBluetoothConnector({
+        manager: new BleManager(),
+        storage: AsyncStorage,
+        requestPermissions: requestBluetoothPermissions,
+      });
+      return connector.connect();
+    },
+  };
 }
