@@ -1,0 +1,147 @@
+/* The browser shell follows apps/mobile/DESIGN.md and the values supplied by its palette. */
+:root { color: var(--text); background: var(--page); }
+body, button, input { font-family: 'Poppins', sans-serif; }
+button { min-height: 56px; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.site { background: var(--page); color: var(--text); }
+.content { max-width: 1400px; padding: 24px 28px 80px; }
+.ambient { width: 26vw; height: 26vw; min-width: 230px; min-height: 230px; opacity: 0; }
+.with-bubbles .ambient { opacity: .38; }
+.ambient-one { background: var(--bubbleOne); }
+.ambient-two { background: var(--bubbleTwo); }
+.header { background: var(--header); border-color: var(--headerBorder); }
+.header-inner { max-width: 1440px; gap: 16px; }
+.brand { color: var(--text); font-size: 2.65rem; }
+.brand .face { width: 62px; height: 62px; border: 0; border-radius: 50%; transform: none; object-fit: cover; }
+.header nav { order: 3; }
+.connection-pill { order: 2; margin-left: auto; background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); font-size: .9rem; }
+.connection-pill span { color: var(--coral); }
+.connection-pill.connected span { color: var(--teal); }
+.nav-item { width: 64px; height: 64px; padding: 0; position: relative; border-radius: 18px;
+  display: grid; place-items: center; color: var(--ink); border: 2px solid transparent; }
+.nav-item span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.nav-item svg { width: 29px; height: 29px; }
+.nav-play { background: var(--teal); }
+.nav-rewards { background: var(--coral); }
+.nav-settings { background: var(--yellow); }
+.nav-item.selected { color: var(--ink); border-color: var(--ink); background: inherit; }
+.nav-play.selected { background: var(--teal); }
+.nav-rewards.selected { background: var(--coral); }
+.nav-settings.selected { background: var(--yellow); }
+.nav-item.selected::after { content: ''; width: 22px; height: 4px; border-radius: 4px;
+  position: absolute; bottom: -8px; background: var(--text); }
+.shelf-screen { display: flex; flex-direction: column; justify-content: center; min-height: min(760px, calc(100dvh - 190px)); }
+.shelf-intro, .shelf-footnote { text-align: center; color: var(--secondary); margin: 6px 0 14px; }
+.shelf-stage { display: grid; grid-template-columns: 60px minmax(0, 1fr) 60px; gap: 14px; align-items: center; }
+.shelf-arrow { border-radius: 50%; width: 56px; height: 56px; padding: 0; border: 2px solid var(--border);
+  background: var(--surface); color: var(--text); font: 700 2.3rem 'Baloo 2'; }
+.game-banner { width: 100%; min-height: 540px; max-width: 1040px; margin: auto; border: 2px solid;
+  border-radius: 32px; padding: clamp(24px, 3vw, 42px); display: grid; grid-template-columns: 1fr 1fr;
+  gap: 22px; position: relative; }
+.banner-left { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; min-width: 0; }
+.banner-left h1 { font-size: clamp(2.6rem, 4.5vw, 4.3rem); line-height: 1.08; margin: 0; }
+.shelf-art { align-self: center; width: min(75%, 330px); aspect-ratio: 1; }
+.use-label { font-size: .94rem; margin: 0; color: var(--text); font-weight: 600; }
+.banner-right { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  text-align: center; min-width: 0; }
+.banner-right>p { font-size: clamp(1rem, 1.5vw, 1.25rem); color: var(--secondary); margin: 0; }
+.banner-score { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.banner-score span { background: var(--berry); color: white; border-radius: 40px; padding: 8px 24px;
+  font: 700 1.3rem 'Baloo 2'; }
+.banner-score strong { color: var(--berry); font: 800 clamp(2.7rem, 4vw, 4rem) 'Baloo 2'; line-height: 1; }
+.banner-options { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.banner-options .choice { min-height: 56px; background: var(--surface); color: var(--text); border-color: var(--border); }
+.banner-options .chosen { color: var(--ink); }
+.banner-play { min-width: 220px; min-height: 68px; border-radius: 40px; color: var(--ink); font: 700 1.6rem 'Baloo 2';
+  box-shadow: none; border-color: var(--ink); }
+.tip-button { position: absolute; top: 20px; right: 20px; width: 56px; height: 56px; padding: 0;
+  border: 2px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text);
+  font: 800 1.5rem 'Baloo 2'; }
+.banner-tip { position: absolute; z-index: 3; top: 85px; right: 20px; width: min(380px, calc(100% - 40px));
+  background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 24px;
+  padding: 20px; box-shadow: 0 8px 20px #0002; }
+.banner-tip strong { font: 700 1.5rem 'Baloo 2'; }
+.banner-tip p { margin: 4px 0 0; }
+.shelf-dots { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; }
+.shelf-dots button { min-height: 26px; width: 26px; height: 26px; padding: 0; border: 6px solid var(--surface);
+  border-radius: 20px; background: var(--coral); }
+.shelf-dots button.active { width: 46px; background: var(--teal); }
+.primary { background: var(--yellow); color: var(--ink); border-color: var(--ink); box-shadow: none; }
+.secondary, .back { background: var(--surface); color: var(--text); border-color: var(--border); }
+.play-panel, .input-panel, .tool-panel, .settings-card, .level-card, .recent, .badge {
+  background: var(--sheet); color: var(--text); border-color: var(--border); }
+.input-panel>p, .settings-card>p, .level-card p, .badge p, .section-head>p,
+.game-title>p:last-child, .recent p { color: var(--secondary); }
+.choice { color: var(--text); background: var(--surface); border-color: var(--border); min-height: 56px; }
+.choice.chosen { color: var(--ink); background: var(--mint); border-color: var(--ink); }
+.timer, .score-line, .level-card>strong { color: var(--text); }
+progress { accent-color: var(--teal); }
+progress::-webkit-progress-value { background: var(--teal); }
+.move-row button { color: var(--text); background: var(--surface); border-color: var(--border); }
+.move-count { background: var(--mint); color: var(--ink); }
+.tap-board { background: var(--surface); border-color: var(--border); }
+.canvas { background: white; border-color: var(--border); }
+.drawing-layout, .tool-panel, .canvas-column { min-width: 0; }
+.tool-panel, .canvas-column { width: 100%; }
+.swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.swatch { min-width: 0; width: 100%; }
+.canvas-actions { flex-wrap: wrap; }
+.rewards-heading { margin-bottom: 26px; background: transparent; padding: 0; }
+.rewards-heading img { display: block; width: 100%; border-radius: 30px; }
+.rewards-heading p { color: var(--secondary); margin: 10px 0 0; }
+.page-heading.settings-heading { background: var(--yellow); color: var(--ink); }
+.page-heading.settings-heading .eyebrow { color: var(--berry); }
+.settings-art { display: block; width: 110px; height: 110px; object-fit: contain; margin-bottom: 8px; }
+.shape-ai-settings { margin-top: 18px; min-height: 0; }
+.shape-ai-settings .name-row { max-width: 700px; }
+.name-row input, .input-choice { background: var(--surface); color: var(--text); border-color: var(--border); }
+.input-choice.selected { background: var(--mint); color: var(--ink); border-color: var(--ink); }
+.input-choice small { color: var(--secondary); }
+.settings-note { background: var(--mint); color: var(--ink); }
+.settings-note p { color: var(--ink); }
+.toggle-row, .calibration, .connection-row { border-color: var(--border); }
+.score-list>div { border-color: var(--border); }
+.score-list small { color: var(--secondary); }
+.badge-art.earned { background: var(--yellow); color: var(--ink); }
+footer { border-color: var(--border); color: var(--secondary); }
+@media (max-width: 800px) {
+  .shelf-stage { grid-template-columns: 48px minmax(0, 1fr) 48px; gap: 8px; }
+  .shelf-arrow { width: 48px; height: 48px; min-height: 48px; }
+  .game-banner { min-height: 560px; }
+}
+@media (max-width: 700px) {
+  .content { padding: 20px 14px 70px; }
+  .header-inner { flex-wrap: nowrap; padding: 8px 12px; }
+  .brand { font-size: 1.65rem; gap: 7px; }
+  .brand .face { width: 43px; height: 43px; }
+  .connection-pill { display: none; }
+  .header nav { margin-left: auto; width: auto; gap: 6px; }
+  .nav-item { width: 56px; height: 56px; padding: 0; }
+  .nav-item svg { width: 25px; height: 25px; }
+  .shelf-screen { min-height: 0; }
+  .shelf-stage { grid-template-columns: 1fr 1fr; }
+  .game-banner { grid-column: 1 / -1; grid-row: 1; grid-template-columns: 1fr; gap: 6px;
+    min-height: 0; padding: 22px; }
+  .banner-left { align-items: center; gap: 10px; }
+  .banner-left h1 { align-self: flex-start; font-size: clamp(2.3rem, 10vw, 3.2rem); padding-right: 44px; }
+  .shelf-art { width: min(43vw, 165px); }
+  .use-label { align-self: flex-start; font-size: .85rem; }
+  .banner-right { gap: 10px; }
+  .banner-score strong { font-size: 2.6rem; }
+  .banner-score span { font-size: 1.05rem; padding: 5px 18px; }
+  .banner-play { min-height: 60px; width: 100%; }
+  .shelf-arrow:first-child { grid-column: 1; grid-row: 2; justify-self: end; }
+  .shelf-arrow:last-child { grid-column: 2; grid-row: 2; justify-self: start; }
+  .shelf-dots { margin-top: 4px; }
+  .game-layout, .drawing-layout, .settings-grid { grid-template-columns: 1fr; }
+  .game-title h1 { font-size: 3rem; }
+  .play-panel, .input-panel, .tool-panel, .settings-card, .level-card, .recent { padding: 20px; }
+  .canvas { min-height: 270px; }
+}
+@media (max-width: 380px) {
+  .brand { font-size: 0; }
+  .brand .face { width: 42px; height: 42px; }
+  .nav-item { width: 52px; height: 52px; }
+  .game-banner { padding: 18px; }
+}
