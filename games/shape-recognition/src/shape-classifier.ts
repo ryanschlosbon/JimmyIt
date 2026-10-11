@@ -15,12 +15,16 @@ export interface ShapeDrawing {
 
 export interface ShapePrediction {
   readonly shape: Shape;
-  /** Geometric drawing quality from 0 to 1; it is not a calibrated probability. */
+  /** Recognition strength from 0 to 1; it is not a calibrated probability. */
   readonly quality: number;
   readonly target: TargetShape | null;
   readonly matchesTarget: boolean | null;
   readonly feedback: ShapeFeedback;
-  readonly algorithm: 'geometry-v1';
+  readonly algorithm: 'geometry-v1' | 'huggingface-siglip2';
+  readonly provider?: 'geometry' | 'huggingface';
+  readonly modelId?: string;
+  readonly modelScore?: number;
+  readonly inferenceTimeMs?: number;
 }
 
 export interface ShapeClassifier {
@@ -181,6 +185,7 @@ export function createShapeClassifier(): ShapeClassifier {
         matchesTarget,
         feedback: shape === 'unknown' ? 'drawMore' : matchesTarget === false ? 'keepTrying' : 'shapeMatched',
         algorithm: 'geometry-v1',
+        provider: 'geometry',
       };
     },
   };

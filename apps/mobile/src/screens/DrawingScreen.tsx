@@ -10,11 +10,16 @@ import { getArtLayout } from '../art-layout';
 import type { Theme } from '../theme';
 import type { Activity } from '../games';
 import type { DrawingAction, Stroke } from '@jimmyit/game-drawing';
+import type { TargetShape } from '@jimmyit/game-shape-recognition';
 
-export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving, onAllGames }: {
+export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving, onAllGames, onCanvasSize,
+  shapeFeedback, shapeTarget = 'circle', shapeIndex = 0, shapeCount = 4 }: {
   readonly theme: Theme; readonly activity: Activity; readonly strokes: readonly Stroke[];
   readonly dispatch: (action: DrawingAction) => void; readonly finish: () => void; readonly saving: boolean;
   readonly onAllGames: () => void;
+  readonly onCanvasSize?: (size: { readonly width: number; readonly height: number }) => void;
+  readonly shapeFeedback?: 'shapeMatched' | 'keepTrying' | 'drawMore';
+  readonly shapeTarget?: TargetShape; readonly shapeIndex?: number; readonly shapeCount?: number;
 }) {
   const { width, height } = useWindowDimensions();
   const compact = width < SIZE.compactWidth;
@@ -87,11 +92,15 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
       </View>
       <View>
         <DrawingCanvas strokes={strokes} dispatch={dispatch} color={color} brushSize={brushSize}
-          shapes={shapes} theme={theme} disabled={saving}
-          height={compact ? ART.phoneCanvasHeight : canvasHeight} />
+          shapes={shapes} shapeTarget={shapeTarget} theme={theme} disabled={saving}
+          height={compact ? ART.phoneCanvasHeight : canvasHeight} onSize={onCanvasSize} />
         {shapes && <View pointerEvents="none" style={{ position: 'absolute', top: SPACE.md, left: SPACE.md,
           right: SPACE.md, borderRadius: RADIUS.sm, padding: SPACE.sm, backgroundColor: theme.sheet }}>
-          <Body theme={theme} small>Follow the circle at your own pace.</Body>
+          <Body theme={theme} small>{`Shape ${Math.min(shapeIndex + 1, shapeCount)} of ${shapeCount} · `}
+            {shapeFeedback === 'shapeMatched' ? `Lovely ${shapeTarget}!`
+              : shapeFeedback === 'drawMore' ? `Add a little more to your ${shapeTarget} and try again.`
+              : shapeFeedback === 'keepTrying' ? `Nice try! Give the ${shapeTarget} another go.`
+              : `Follow the ${shapeTarget} at your own pace.`}</Body>
         </View>}
       </View>
       <View style={{ flexDirection: 'row', gap: SPACE.md, justifyContent: 'flex-end', flexWrap: 'wrap' }}>

@@ -34,6 +34,9 @@ export function SettingsScreen({ theme, state, replayIntro }: {
   const [keyDraft, setKeyDraft] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyMessage, setKeyMessage] = useState<string | null>(null);
+  const [shapeKeyDraft, setShapeKeyDraft] = useState('');
+  const [shapeKeyBusy, setShapeKeyBusy] = useState(false);
+  const [shapeKeyMessage, setShapeKeyMessage] = useState<string | null>(null);
   const ai = state.aiSettings;
   const saveName = (reset = false) => {
     if (nameBusy) return;
@@ -65,6 +68,24 @@ export function SettingsScreen({ theme, state, replayIntro }: {
     state.clearGeminiKey().then(() => setKeyMessage('Key removed from this session.'))
       .catch(() => setKeyMessage('Key cleared here. The local service will expire its copy.'))
       .finally(() => setKeyBusy(false));
+  };
+  const saveShapeKey = () => {
+    if (shapeKeyBusy || !shapeKeyDraft.trim()) return;
+    setShapeKeyBusy(true);
+    setShapeKeyMessage(null);
+    state.saveShapeKey(shapeKeyDraft.trim()).then(() => {
+      setShapeKeyDraft('');
+      setShapeKeyMessage('Shape key saved for this session. Try Shape Quest now.');
+    }).catch(() => setShapeKeyMessage('Could not connect to the shape AI service. Check its address and try again.'))
+      .finally(() => setShapeKeyBusy(false));
+  };
+  const removeShapeKey = () => {
+    if (shapeKeyBusy) return;
+    setShapeKeyBusy(true);
+    setShapeKeyDraft('');
+    state.clearShapeKey().then(() => setShapeKeyMessage('Shape key removed from this session.'))
+      .catch(() => setShapeKeyMessage('Key cleared here. The AI service will expire its copy.'))
+      .finally(() => setShapeKeyBusy(false));
   };
   const generatePreview = () => {
     if (previewBusy) return;
@@ -244,6 +265,24 @@ export function SettingsScreen({ theme, state, replayIntro }: {
           <Button theme={theme} label="3.5 Flash-Lite" selected={ai.model === 'gemini-3.5-flash-lite'}
             onPress={() => updateAI({ model: 'gemini-3.5-flash-lite' })} />
         </View>
+      </View>
+      <View style={{ gap: 8 }}><Heading theme={theme} size={23}>Hugging Face key for Shape Quest</Heading>
+        <TextInput editable={!shapeKeyBusy} secureTextEntry value={shapeKeyDraft} onChangeText={setShapeKeyDraft}
+          autoCapitalize="none" autoCorrect={false} placeholder="Paste your Hugging Face token"
+          accessibilityLabel="Hugging Face token" style={{ borderWidth: 1.5,
+            borderColor: theme.border, borderRadius: 14, padding: 14, color: theme.text }} />
+        <Body theme={theme} small>The token goes to your configured AI service over HTTPS, or localhost in a
+          development preview. It stays in memory for up to 30 minutes and is never saved in app settings.
+          Drawings use a temporary session ID.</Body>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <Button theme={theme} label={shapeKeyBusy ? 'Saving…' : 'Save shape key for this session'}
+            onPress={saveShapeKey} disabled={shapeKeyBusy || !shapeKeyDraft.trim()} />
+          <Button theme={theme} label="Remove shape key" onPress={removeShapeKey}
+            disabled={shapeKeyBusy || !state.shapeSessionToken} />
+        </View>
+        <View accessibilityLiveRegion="polite"><Body theme={theme} small>{shapeKeyMessage ??
+          (state.shapeSessionToken ? 'A shape key is ready for this session.' :
+            'Without a key, Shape Quest recognizes drawings on this device.')}</Body></View>
       </View>
       <View style={{ gap: 8 }}><Heading theme={theme} size={23}>Gemini API key</Heading>
         <TextInput editable={!keyBusy} secureTextEntry value={keyDraft} onChangeText={setKeyDraft}

@@ -18,8 +18,13 @@ const connector = createBluetoothConnector({ manager: new BleManager(), storage:
 const services = createJimmyServices({ storage: AsyncStorage, connector });
 ```
 
+Before scanning it waits (up to 30 s) for the radio to report `PoweredOn`. Off
+or unsupported Bluetooth rejects with `BluetoothUnavailableError`; iOS's
+`Unauthorized` rejects with `BluetoothPermissionError`.
+
 `apps/mobile/src/bluetooth.ts` does exactly this, with Android's permission
-prompt. The app uses it in release builds, or in a development build started
+prompt. It creates the `BleManager` on the first connect, because creating it
+is what shows iOS's Bluetooth permission prompt. The app uses it in release builds, or in a development build started
 with `EXPO_PUBLIC_JIMMY_TOY=bluetooth`.
 
 ## Android requirements

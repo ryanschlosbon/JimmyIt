@@ -11,8 +11,14 @@ import { createFakeFidget, type FakeFidget } from '@jimmyit/fake-fidget';
 import { FIDGET_SERVICE_UUID, type FidgetCharacteristic, FidgetCharacteristicUuid } from '@jimmyit/protocol';
 import { describe, expect, it } from 'vitest';
 import { base64ToBytes, bytesToBase64 } from './base64';
-import type { BleDeviceLike, BleManagerLike } from './ble-plx-types';
-import { BluetoothPermissionError, createBluetoothConnector, LAST_TOY_STORAGE_KEY, ToyNotFoundError } from './bluetooth-connector';
+import type { BleDeviceLike, BleManagerLike, BleState } from './ble-plx-types';
+import {
+  BluetoothPermissionError,
+  BluetoothUnavailableError,
+  createBluetoothConnector,
+  LAST_TOY_STORAGE_KEY,
+  ToyNotFoundError,
+} from './bluetooth-connector';
 
 const TOY_ID = 'C0:FF:EE:00:00:01';
 
@@ -22,8 +28,19 @@ function characteristicName(uuid: string): FidgetCharacteristic {
   return entry[0] as FidgetCharacteristic;
 }
 
-function simulatedRadio(toy: FakeFidget, options: { advertising?: boolean } = {}) {
+interface RadioOptions {
+  readonly advertising?: boolean;
+  readonly state?: BleState;
+}
+
+function simulatedRadio(toy: FakeFidget, options: RadioOptions = {}) {
   const calls = { scans: 0, connects: [] as string[] };
+  let state: BleState = options.state ?? 'PoweredOn';
+  const stateListeners = new Set<(state: BleState) => void>();
+  const setState = (next: BleState) => {
+    state = next;
+    for (const listener of stateListeners) listener(next);
+  };
   const device: BleDeviceLike = {
     id: TOY_ID,
     name: 'JimmyIt',
@@ -52,8 +69,18 @@ function simulatedRadio(toy: FakeFidget, options: { advertising?: boolean } = {}
     },
   };
   const manager: BleManagerLike = {
+    onStateChange(listener, emitCurrentState) {
+      stateListeners.add(listener);
+      if (emitCurrentState) listener(state);
+      return { remove: () => stateListeners.delete(listener) };
+    },
     startDeviceScan(uuids, _options, listener) {
       calls.scans++;
+      // Like ble-plx: scanning before PoweredOn fails.
+      if (state !== 'PoweredOn') {
+        listener(new Error(`BluetoothLE is in ${state} state`), null);
+        return;
+      }
       if ((options.advertising ?? true) && uuids?.includes(FIDGET_SERVICE_UUID)) {
         void Promise.resolve().then(() => listener(null, device));
       }
@@ -68,10 +95,10 @@ function simulatedRadio(toy: FakeFidget, options: { advertising?: boolean } = {}
       return { remove: toy.transport.onDisconnect((error) => listener(error, null)) };
     },
   };
-  return { manager, calls };
+  return { manager, calls, setState, stateListeners };
 }
 
-function setup(options: { advertising?: boolean } = {}) {
+function setup(options: RadioOptions = {}) {
   const time = createManualTime(Date.UTC(2026, 9, 10));
   const toy = createFakeFidget({ clock: time.clock });
   const radio = simulatedRadio(toy, options);
@@ -128,10 +155,43 @@ describe('Bluetooth connector', () => {
   });
 
   it('gives up when no toy is advertising', async () => {
-    const { manager, time, scheduler } = setup({ advertising: false });
+    const { manager, calls, time, scheduler } = setup({ advertising: false });
     const connecting = createBluetoothConnector({ manager, scheduler, scanTimeoutMs: 5_000 }).connect();
-    await Promise.resolve();
+    while (calls.scans === 0) await Promise.resolve();
     time.advance(5_000);
     await expect(connecting).rejects.toThrow(ToyNotFoundError);
+  });
+
+  it('waits for Bluetooth to power on before scanning', async () => {
+    const { manager, calls, scheduler, setState, stateListeners } = setup({ state: 'Unknown' });
+    const connecting = createBluetoothConnector({ manager, scheduler }).connect();
+    await Promise.resolve();
+    expect(calls.scans).toBe(0);
+    setState('PoweredOn');
+    await connecting;
+    expect(calls.scans).toBe(1);
+    expect(stateListeners.size).toBe(0);
+  });
+
+  it('reports Bluetooth that is turned off', async () => {
+    const { manager, calls, scheduler } = setup({ state: 'PoweredOff' });
+    const connecting = createBluetoothConnector({ manager, scheduler }).connect();
+    await expect(connecting).rejects.toThrow(BluetoothUnavailableError);
+    await expect(connecting).rejects.toMatchObject({ state: 'PoweredOff' });
+    expect(calls.scans).toBe(0);
+  });
+
+  it('treats an unauthorized radio as refused permission (iOS)', async () => {
+    const { manager, scheduler } = setup({ state: 'Unauthorized' });
+    await expect(createBluetoothConnector({ manager, scheduler }).connect()).rejects.toThrow(BluetoothPermissionError);
+  });
+
+  it('gives up when Bluetooth never becomes ready', async () => {
+    const { manager, time, scheduler, stateListeners } = setup({ state: 'Unknown' });
+    const connecting = createBluetoothConnector({ manager, scheduler, readyTimeoutMs: 30_000 }).connect();
+    await Promise.resolve();
+    time.advance(30_000);
+    await expect(connecting).rejects.toMatchObject({ name: 'BluetoothUnavailableError', state: 'Unknown' });
+    expect(stateListeners.size).toBe(0);
   });
 });

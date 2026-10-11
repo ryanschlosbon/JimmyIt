@@ -70,4 +70,17 @@ describe('shape recognition game', () => {
     expect(h.run.getScore().score).toBe(0);
     await h.run.quit();
   });
+
+  it('uses a supplied model result to score the existing shape challenge', async () => {
+    const h = await createGameTestHarness(createShapeRecognitionGame({ targets: ['square'] }), { toy: false });
+    h.run.submit({ type: 'submitDrawing', submissionId: 'model-one', drawing: square,
+      prediction: { shape: 'square', quality: 0.8, target: 'triangle', matchesTarget: false,
+        feedback: 'keepTrying', algorithm: 'huggingface-siglip2', provider: 'huggingface',
+        modelId: 'prithivMLmods/Geometric-Shapes-Classification', modelScore: 0.8 },
+    });
+    const record = await h.run.result;
+    expect(record.score).toBe(28);
+    expect(h.run.getState().lastResult).toMatchObject({ provider: 'huggingface', matchesTarget: true });
+    expect(await h.repository.list({ gameId: 'shape-recognition' })).toEqual([record]);
+  });
 });
