@@ -17,11 +17,11 @@ build `firmware/test`'s sources with a small main that calls
 `BootAnimation::draw` per frame.
 
 ```
-power on → BOOT (4 s) → WELCOME (5 s) → INSTRUCTIONS (10 s) → READY ──first move──► PLAYING ──2 s, no move──► GRACE (1 s) ──no move──► RESULT (4.2 s) ─┐
-                        (a press skips any)                   ▲                   +10 per press  ◄─a move── bar runs down            score, then     │
-                                                                │                   +5 per ¼ turn                                      Jimmy hops      │
-                                                                │ "MAKE A MOVE TO START!"          milestones: 100, 500, 1000…                         │
-                                                                └──────────────────────────────────────────────────────────────────────────────────────┘
+power on → BOOT (4 s) → READY ──first move──► PLAYING ──2 s, no move──► GRACE (1 s) ──no move──► RESULT (4.2 s) ─┐
+                          ▲                   +10 per press  ◄─a move── bar runs down            score, then     │
+                          │                   +5 per ¼ turn                                      Jimmy hops      │
+                          │ "MAKE A MOVE TO START!"          milestones: 100, 500, 1000…                         │
+                          └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Free Play is the default game.** On READY it waits; the child's first move

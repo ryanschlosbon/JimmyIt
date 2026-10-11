@@ -23,8 +23,6 @@ struct AppDisplay {
 bool uiBegin();
 void uiFlush();
 
-void uiWelcome();
-void uiInstructions();
 // The selected toy game, waiting for the child's first move.
 void uiReady(const char* gameTitle, bool showMenuHint, bool linked);
 // graceRemaining: 1 → 0 while the game is about to end for lack of a move (a bar
