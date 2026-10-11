@@ -109,4 +109,14 @@ RawInputs inputsRead() {
   return in;
 }
 
-bool inputsHaveMenuKeys() { return JIMMYIT_HAS_MCP23017 || JIMMYIT_HAS_BREADBOARD_MENU_KEYS; }
+// With no menu keys the clicker answers "yes", so an expander that is enabled
+// but missing or miswired can never leave a phone unable to connect.
+bool inputsHaveMenuKeys() {
+#if JIMMYIT_HAS_BREADBOARD_MENU_KEYS
+  return true;
+#elif JIMMYIT_HAS_MCP23017
+  return mcpOk;
+#else
+  return false;
+#endif
+}
