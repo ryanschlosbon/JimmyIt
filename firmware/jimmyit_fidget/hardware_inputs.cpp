@@ -11,6 +11,10 @@
 #include <Adafruit_MCP23X17.h>
 #endif
 
+#if JIMMYIT_HAS_ENCODER && !JIMMYIT_HAS_MCP23017
+#error "The encoder is wired to the MCP23017: turn on JIMMYIT_HAS_MCP23017 too"
+#endif
+
 using namespace jimmyit;
 
 namespace {
@@ -19,16 +23,15 @@ namespace {
 Adafruit_MCP23X17 mcp;
 bool mcpOk = false;
 
-// MCP23017 pin (0-7 = GPA0-7, 8-15 = GPB0-7) for each SwitchBit, per the D4 schematic.
+// MCP23017 pin (0-7 = GPA0-7, 8-15 = GPB0-7) for each SwitchBit, as wired on the current board.
+// The rocker, screw limit switches and stylus bay aren't wired yet, so they read open.
 struct PinMap {
   uint8_t mcpPin;
   uint8_t switchBit;
 };
 constexpr PinMap kSwitchPins[] = {
-    {0, SwitchBit::kClicker},   {1, SwitchBit::kNavLeft},   {2, SwitchBit::kNavRight},
-    {3, SwitchBit::kRocker},    {4, SwitchBit::kScrewHome}, {5, SwitchBit::kScrewOut},
-    {8, SwitchBit::kSliderLow}, {9, SwitchBit::kSliderHigh}, {10, SwitchBit::kStylusStowed},
-    // GPA6 was the shirt-button flap; it is no longer fitted.
+    {15, SwitchBit::kClicker},  {0, SwitchBit::kNavLeft},     {1, SwitchBit::kNavRight},
+    {13, SwitchBit::kSliderLow}, {14, SwitchBit::kSliderHigh}, {2, SwitchBit::kScrewPush},
 };
 #endif
 
@@ -38,8 +41,13 @@ constexpr uint8_t kAs5600RawAngleRegister = 0x0c;
 #endif
 
 #if JIMMYIT_HAS_ENCODER
+// The encoder's A / B pins are on the expander (GPA3 / GPA4), so they are polled
+// every loop rather than read by interrupt.
+constexpr uint8_t kEncoderPinA = 3;
+constexpr uint8_t kEncoderPinB = 4;
 QuadratureDecoder encoder;
-void onEncoderEdge() { encoder.onEdge(digitalRead(D6) == HIGH, digitalRead(D7) == HIGH); }
+bool encoderA(uint16_t levels) { return (levels & (1u << kEncoderPinA)) != 0; }
+bool encoderB(uint16_t levels) { return (levels & (1u << kEncoderPinB)) != 0; }
 #endif
 
 }  // namespace
@@ -56,16 +64,15 @@ void inputsBegin() {
   mcpOk = mcp.begin_I2C(0x20, &Wire);
   if (mcpOk) {
     for (const PinMap& p : kSwitchPins) mcp.pinMode(p.mcpPin, INPUT_PULLUP);
+#if JIMMYIT_HAS_ENCODER
+    mcp.pinMode(kEncoderPinA, INPUT_PULLUP);
+    mcp.pinMode(kEncoderPinB, INPUT_PULLUP);
+    const uint16_t levels = mcp.readGPIOAB();
+    encoder.begin(encoderA(levels), encoderB(levels));
+#endif
   } else {
     Serial.println("MCP23017 not found at 0x20");
   }
-#endif
-#if JIMMYIT_HAS_ENCODER
-  pinMode(D6, INPUT_PULLUP);
-  pinMode(D7, INPUT_PULLUP);
-  encoder.begin(digitalRead(D6) == HIGH, digitalRead(D7) == HIGH);
-  attachInterrupt(digitalPinToInterrupt(D6), onEncoderEdge, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(D7), onEncoderEdge, CHANGE);
 #endif
 }
 
@@ -86,6 +93,9 @@ RawInputs inputsRead() {
     for (const PinMap& p : kSwitchPins) {
       if ((levels & (1u << p.mcpPin)) == 0) in.closedSwitches |= 1u << p.switchBit;
     }
+#if JIMMYIT_HAS_ENCODER
+    encoder.onEdge(encoderA(levels), encoderB(levels));  // no change, no count
+#endif
   }
 #endif
 

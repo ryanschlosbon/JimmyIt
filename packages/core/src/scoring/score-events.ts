@@ -1,4 +1,4 @@
-import { POINTS_PER_MILESTONE, ScoreEventKind, type ScoreEventKindName } from '@jimmyit/protocol';
+import { nextMilestoneAfter, ScoreEventKind, type ScoreEventKindName } from '@jimmyit/protocol';
 
 /**
  * A moment worth celebrating in a game (PROTOCOL.md "Score events"). The same
@@ -14,7 +14,8 @@ export interface ScoreEvent {
   readonly score: number;
   /**
    * gameStart / gameEnd: the best score before this game (0 = none).
-   * points: points just added. milestone: the multiple of 100 reached.
+   * points: points just added. milestone: the milestone reached (100, 500,
+   * 1000, 1500, 2000, 3000, then every 1000; see nextMilestoneAfter).
    * newBest: the best that was just beaten.
    */
   readonly value: number;
@@ -38,7 +39,7 @@ export function createScoreEventTracker(previousBest: number): ScoreEventTracker
     onScore(score) {
       if (score <= lastScore) return [];
       const events: ScoreEventDraft[] = [{ kind: 'points', score, value: score - lastScore }];
-      for (let m = (Math.floor(lastScore / POINTS_PER_MILESTONE) + 1) * POINTS_PER_MILESTONE; m <= score; m += POINTS_PER_MILESTONE) {
+      for (let m = nextMilestoneAfter(lastScore); m <= score; m = nextMilestoneAfter(m)) {
         events.push({ kind: 'milestone', score, value: m });
       }
       if (previousBest > 0 && !beatBest && score > previousBest) {

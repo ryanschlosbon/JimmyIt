@@ -3,43 +3,54 @@
 namespace jimmyit {
 
 namespace {
-// DRV2605L ROM effects; names match the app's Feedback presets.
-constexpr uint8_t kTap = 7;          // Soft Bump
-constexpr uint8_t kTick = 24;        // Sharp Tick 1
-constexpr uint8_t kSuccess = 10;     // Double Click
-constexpr uint8_t kTripleClick = 12;
-constexpr uint8_t kStrongBuzz = 14;
+// DRV2605L ROM effects (TI effect list, library 6 for the LRA).
+constexpr uint8_t kDoubleClick = 10;  // Double Click - 100%
+constexpr uint8_t kTripleClick = 12;  // Triple Click - 100%
+constexpr uint8_t kStrongBuzz = 14;   // Strong Buzz - 100%
+constexpr uint8_t kBuzz = 47;         // Buzz 1 - 100%
+
+CelebrationStyle style(uint16_t durationMs, uint8_t priority, bool fullScreen, uint8_t a = 0, uint8_t b = 0, uint8_t c = 0) {
+  return CelebrationStyle{durationMs, priority, {a, b, c}, static_cast<uint8_t>((a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0)),
+                          fullScreen};
+}
+
+// Bigger milestones feel bigger: 100, then 500, then 1000-2000, then 3000 and up.
+CelebrationStyle milestoneStyle(uint32_t milestone) {
+  if (milestone >= 3000) return style(2000, 4, true, kTripleClick, kStrongBuzz);
+  if (milestone >= 1000) return style(2000, 4, true, kTripleClick, kBuzz);
+  if (milestone >= 500) return style(2000, 4, true, kTripleClick);
+  return style(2000, 4, true, kDoubleClick);
+}
 }  // namespace
 
-CelebrationStyle celebrationStyle(uint8_t kind, bool newBestAtEnd) {
+CelebrationStyle celebrationStyle(uint8_t kind, uint32_t value, bool newBestAtEnd) {
   switch (kind) {
     case ScoreEventKind::kGameStart:
-      return CelebrationStyle{700, 2, {kTap, 0}, 1, true};
+      return style(700, 2, true);
     case ScoreEventKind::kPoints:
-      return CelebrationStyle{350, 1, {kTick, 0}, 1, false};
+      return style(350, 1, false);
     case ScoreEventKind::kMilestone:
-      return CelebrationStyle{2000, 4, {kSuccess, 0}, 1, true};
+      return milestoneStyle(value);
     case ScoreEventKind::kNewBest:
-      return CelebrationStyle{2500, 5, {kTripleClick, kStrongBuzz}, 2, true};
+      return style(2500, 5, true, kStrongBuzz, kTripleClick, kStrongBuzz);  // the most intense
     case ScoreEventKind::kGameEnd:
-      return newBestAtEnd ? CelebrationStyle{0, 3, {kTripleClick, kStrongBuzz}, 2, true}
-                          : CelebrationStyle{0, 3, {kSuccess, 0}, 1, true};
+      return newBestAtEnd ? style(0, 3, true, kTripleClick, kStrongBuzz) : style(0, 3, true, kDoubleClick);
     default:
-      return CelebrationStyle{0, 0, {0, 0}, 0, false};
+      return style(0, 0, false);
   }
 }
 
 bool Celebration::start(uint8_t kind, uint32_t score, uint32_t value, uint32_t nowMs, bool newBestAtEnd) {
-  const CelebrationStyle style = celebrationStyle(kind, newBestAtEnd);
-  if (style.priority == 0) return false;
-  if (active(nowMs) && style.priority < priority_) return false;
+  const CelebrationStyle next = celebrationStyle(kind, value, newBestAtEnd);
+  if (next.priority == 0) return false;
+  if (active(nowMs) && next.priority < priority_) return false;
   kind_ = kind;
-  priority_ = style.priority;
-  fullScreen_ = style.fullScreen;
+  priority_ = next.priority;
+  fullScreen_ = next.fullScreen;
   score_ = score;
   value_ = value;
   startMs_ = nowMs;
-  durationMs_ = style.durationMs;
+  durationMs_ = next.durationMs;
   return true;
 }
 

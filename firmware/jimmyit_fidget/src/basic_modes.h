@@ -10,15 +10,17 @@
 
 namespace jimmyit {
 
-// Moves made between two input packets, counted the same way as the app's
-// createToyActionTracker (packages/core/src/input/toy-actions.ts).
+// Switch moves made between two input packets, counted the same way as the app's
+// createToyActionTracker (packages/core/src/input/toy-actions.ts). Spins and
+// screw quarter turns need a remembered position, so BasicGame counts those
+// with SpinSteps.
 struct MoveCount {
-  uint32_t presses;  // clicker, menu keys, rocker flips, slider ends, stylus taken out
-  uint32_t screw;    // detents, either direction
+  uint32_t presses;  // clicker, menu keys, screw push, rocker flips, slider ends, stylus taken out
 };
 
-// Counts spinner moves of `step` counts in either direction. Measures from the
-// last counted position, so sensor jitter around one spot never adds up to a move.
+// Counts moves of `step` counts in either direction (spinner quarter turns, screw
+// quarter turns). Measures from the last counted position, so sensor jitter or
+// wiggling one detent back and forth never adds up to a move.
 class SpinSteps {
  public:
   void reset(int32_t position) { anchor_ = position; }
@@ -35,25 +37,32 @@ class SpinSteps {
 // stylus going back in are positions, not moves.
 constexpr uint16_t kMoveOnCloseBits = (1u << SwitchBit::kClicker) | (1u << SwitchBit::kNavLeft) |
                                       (1u << SwitchBit::kNavRight) | (1u << SwitchBit::kRocker) |
-                                      (1u << SwitchBit::kSliderLow) | (1u << SwitchBit::kSliderHigh);
+                                      (1u << SwitchBit::kSliderLow) | (1u << SwitchBit::kSliderHigh) |
+                                      (1u << SwitchBit::kScrewPush);
 // Bits that are a move when they open: the rocker latches (both ways count), and
 // opening the stylus switch means the stylus was taken out.
 constexpr uint16_t kMoveOnOpenBits = (1u << SwitchBit::kRocker) | (1u << SwitchBit::kStylusStowed);
 
+// Both games: the first move starts the game (Ready waits forever). After
+// kIdleBeforeGraceMs with no move the game is in "grace" for kGraceMs (the toy
+// shows a bar running down); any move in grace carries on as normal, and when
+// grace runs out the game ends, completed. Neither game runs longer than kMaxMs.
 class BasicGame {
  public:
   static constexpr int32_t kSpinCountsPerMove = kSpinnerCountsPerTurn / 4;  // a 90° spin, as in the app
-  static constexpr uint32_t kSpinCountDurationMs = 30000;
-  static constexpr uint32_t kSpinCountPointsPerTurn = 10;
-  static constexpr uint32_t kFreePlayPointsPerMove = 10;
-  // "Takes too long for the next move": Free Play ends this long after the last move.
-  static constexpr uint32_t kFreePlayIdleEndMs = 20000;
-  static constexpr uint32_t kFreePlayMaxMs = 180000;
+  static constexpr int32_t kScrewDetentsPerMove = kScrewDetentsPerTurn / 4;  // a quarter turn, as in the app
+  // Free Play: a switch move (press, flip, slider end, stylus out) scores this…
+  static constexpr uint32_t kPointsPerPress = 10;
+  // …and, in both games, a quarter turn of the spinner or the screw scores this.
+  static constexpr uint32_t kPointsPerQuarterTurn = 5;
+  static constexpr uint32_t kIdleBeforeGraceMs = 2000;
+  static constexpr uint32_t kGraceMs = 1000;
+  static constexpr uint32_t kMaxMs = 180000;
 
-  // Waits for the child's first move, then starts the clock and scores that move.
+  // Waits for the child's first move, then starts the game and scores that move.
   // nowUnix is real time if clockSet, otherwise seconds since boot.
   bool arm(uint8_t modeId, uint32_t nowMs, uint32_t nowUnix, bool clockSet);
-  // Starts the clock immediately; the next update() only sets the baseline.
+  // Starts the game immediately; the next update() only sets the baseline.
   bool start(uint8_t modeId, uint32_t nowMs, uint32_t nowUnix, bool clockSet);
   void update(const InputPacket& input, uint32_t nowMs);
   // Ends early (the app took over, power low…): completed = false. Disarms an armed game.
@@ -65,12 +74,15 @@ class BasicGame {
   uint8_t modeId() const { return modeId_; }
   uint32_t score() const { return score_; }
   uint16_t actions() const { return actions_; }
-  uint32_t remainingMs(uint32_t nowMs) const;
+  // While in grace, the share of it left: 1 when grace starts, falling to 0 as the
+  // game ends. kNotInGrace (negative) otherwise.
+  static constexpr float kNotInGrace = -1.0f;
+  float graceRemaining(uint32_t nowMs) const;
 
   // The finished game as a log entry (recordId is assigned by ScoreLog::add).
   ScoreEntry result(uint32_t previousBest) const;
 
-  // Presses and screw detents between two packets (spins are counted
+  // Switch moves between two packets (spins and screw turns are counted
   // separately with SpinSteps). Exposed for tests and for the sketch's menus.
   static MoveCount countMoves(const InputPacket& previous, const InputPacket& current);
 
@@ -79,9 +91,9 @@ class BasicGame {
 
   bool reset(uint8_t modeId, uint32_t nowMs, uint32_t nowUnix, bool clockSet);
   void begin(uint32_t nowMs);
-  void score(const MoveCount& moves, uint32_t nowMs);
+  void score(uint32_t presses, uint32_t quarterTurns, uint32_t nowMs);
   void finish(uint32_t nowMs, bool completed);
-  void addActions(uint32_t count, uint32_t nowMs);
+  void addActions(uint32_t count);
 
   Phase phase_ = Phase::kIdle;
   uint8_t modeId_ = 0;
@@ -92,13 +104,14 @@ class BasicGame {
   uint32_t armedUnix_ = 0;
   uint32_t startMs_ = 0;
   uint32_t endMs_ = 0;
-  uint32_t lastActionMs_ = 0;
+  uint32_t lastMoveMs_ = 0;
   uint32_t startUnix_ = 0;
   uint32_t score_ = 0;
   uint16_t actions_ = 0;
   InputPacket previous_ = {};
-  SpinSteps spinMoves_;  // quarter turns, for Free Play moves and for arming
-  SpinSteps spinTurns_;  // full turns, for Spin Count
+  int32_t screwPosition_ = 0;  // screwTotal unwrapped from 16 bits
+  SpinSteps spinMoves_;        // spinner quarter turns
+  SpinSteps screwMoves_;       // screw quarter turns
 };
 
 }  // namespace jimmyit

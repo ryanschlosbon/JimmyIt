@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { MOVE_STYLES, noteCenterX, riffWidth } from './note-highway';
 
 describe('note highway', () => {
-  it('describes every toy move in words, with the computer key as a hint', () => {
-    expect(Object.entries(MOVE_STYLES).map(([move, style]) => [move, style.word, style.key])).toEqual([
-      ['click', 'Click', 'A'], ['left', 'Left', 'S'], ['right', 'Right', 'D'], ['spin', 'Spin', 'F'],
+  it('describes every toy move in words, with the part of Jimmy that plays it', () => {
+    expect(Object.entries(MOVE_STYLES).map(([move, style]) => [move, style.word, style.control])).toEqual([
+      ['click', 'Click', 'Top button'], ['left', 'Left', 'Left key'], ['right', 'Right', 'Right key'],
+      ['strum', 'Strum', 'Slider'], ['spin', 'Spin', 'Knob'],
     ]);
   });
 

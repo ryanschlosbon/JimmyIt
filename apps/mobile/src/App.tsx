@@ -8,7 +8,7 @@ import { Poppins_500Medium } from '@expo-google-fonts/poppins/500Medium';
 import { Poppins_400Regular } from '@expo-google-fonts/poppins/400Regular';
 import { Poppins_600SemiBold } from '@expo-google-fonts/poppins/600SemiBold';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createJimmyServices, JimmyServicesProvider, ToyNotConnectedError, useGameRun } from '@jimmyit/app-kit';
+import { createJimmyServices, JimmyServicesProvider, ToyNotConnectedError, useGameRun, useReward } from '@jimmyit/app-kit';
 import { drawingReducer, type DrawingAction, type DrawingGameAction, type DrawingGameState, type Stroke } from '@jimmyit/game-drawing';
 import { createButtonHeroGame, type ButtonHeroAction, type ButtonHeroDifficulty,
   type ButtonHeroState } from '@jimmyit/game-button-hero';
@@ -29,6 +29,7 @@ import { DRAWING_GAMES, PLAY_SHELF, SHAPE_CHALLENGE_GAME, TIMED_PRACTICE_SECONDS
 import { createSessionShapeRecognizer } from './shape-recognition-service';
 import { createToySetup, loadDevToyPanel } from './toy-connector';
 import { CelebrationToast } from './components/CelebrationToast';
+import { RewardToast } from './components/RewardToast';
 import { GameScoreBar } from './components/GameScoreBar';
 import { PlayScreen } from './screens/PlayScreen';
 import { DrawingScreen } from './screens/DrawingScreen';
@@ -42,7 +43,7 @@ import { Icon } from './components/Icon';
 import { AppHeader, type HeaderTab } from './components/AppHeader';
 import { Bubbles } from './components/Bubbles';
 import type { BannerStat } from './components/GameBanner';
-import { ART, FONTS, RADIUS, SETTINGS, SPACE } from './design/tokens';
+import { ART, FONTS, GAME_STAGE, RADIUS, SETTINGS, SPACE } from './design/tokens';
 import { Jimmy } from './components/Jimmy';
 import { setupWebAccessibility } from './web-accessibility';
 import { attachGameKeyboard } from './game-keyboard';
@@ -121,11 +122,14 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const [reward, setReward] = useState<number | null>(null);
   const [rewardNewBest, setRewardNewBest] = useState(false);
   const [rewardFrom, setRewardFrom] = useState<'draw' | 'timed' | 'tapQuest'>('draw');
+  const levelOrBadge = useReward();
   const scroll = useRef<ScrollView>(null);
   const tapQuestSeed = useRef(0);
   const knobQuestSeed = useRef(0);
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const compact = width < 680;
+  // Games fill the screen instead of scrolling, so a drag on the play area always plays.
+  const gameScreen = screen === 'draw' || isActivity(screen);
   useEffect(() => setupWebAccessibility(state.dark), [state.dark]);
   useEffect(() => {
     if (screen !== 'buttonHero' && screen !== 'knobQuest') return;
@@ -296,6 +300,8 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     ? activityRuns[screen as keyof typeof activityRuns].score?.score ?? 0 : null;
   const tab: HeaderTab = screen === 'rewards' ? 'rewards' : screen === 'settings' ? 'settings' : 'play';
   const onTab = (next: HeaderTab) => navigate(next === 'play' ? 'home' : next);
+  const rewardToast = <RewardToast theme={theme} reward={levelOrBadge}
+    badgeLabel={id => state.progress.badges.find(badge => badge.id === id)?.label ?? 'a new badge'} />;
   const errorBanner = state.error && <View accessibilityRole="alert" style={{ backgroundColor: theme.softCoral,
     borderRadius: 16, padding: 18, marginBottom: 20, flexDirection: 'row', alignItems: 'center', gap: 15 }}>
     <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>{state.error}</Body></View>
@@ -305,60 +311,67 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     <Bubbles theme={theme} animated={state.bubbles} />
     <SafeAreaView style={{ flex: 1 }}>
     <StatusBar barStyle={state.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.page} />
-    <AppHeader theme={theme} compact={compact} active={tab} connection={state.connection} onTab={onTab} />
+    {/* Short landscape windows get the slimmer header on game screens, leaving more room to play. */}
+    <AppHeader theme={theme} compact={compact || (gameScreen && height < 820)} active={tab}
+      connection={state.connection} onTab={onTab} />
     {screen === 'home' ? <View role="main" style={{ flex: 1, paddingHorizontal: compact ? 0 : 8 }}>
       {errorBanner && <View style={{ paddingHorizontal: 18, paddingTop: 16, width: '100%', maxWidth: 1164,
         alignSelf: 'center' }}>{errorBanner}</View>}
       <PlayScreen theme={theme} games={PLAY_SHELF} stats={stats} choices={choices} onChoose={choose} onPlay={play}
         index={shelfIndex} onIndex={setShelfIndex} toyConnected={state.connection === 'connected'} />
-    </View> : <ScrollView ref={scroll} role="main" keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ flexGrow: 1, paddingHorizontal: screen === 'draw' ? SPACE.sm : compact ? 10 : 30,
-        paddingTop: screen === 'draw' ? SPACE.sm : compact ? 12 : 22,
-        paddingBottom: screen === 'draw' ? SPACE.sm : 30 }}>
-      <View style={{ width: '100%', maxWidth: screen === 'draw' ? ART.maxWidth
-        : screen === 'settings' ? SETTINGS.maxWidth : 1200, alignSelf: 'center',
-        backgroundColor: screen === 'draw' || screen === 'settings' ? undefined : theme.sheet,
-        borderRadius: RADIUS.xl, padding: screen === 'draw' ? SPACE.xs : screen === 'settings' ? 0 : compact ? 14 : 30 }}>
+    </View> : gameScreen ? <View role="main" style={{ flex: 1, paddingHorizontal: compact ? SPACE.sm : SPACE.lg,
+      paddingVertical: SPACE.sm }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: screen === 'draw' ? ART.maxWidth : GAME_STAGE.maxWidth,
+        alignSelf: 'center', gap: SPACE.sm, borderRadius: RADIUS.xl,
+        backgroundColor: screen === 'draw' ? undefined : theme.sheet,
+        padding: screen === 'draw' ? SPACE.xs : compact ? SPACE.sm : SPACE.md }}>
         {errorBanner}
-        {isActivity(screen) && <Button theme={theme} label="All games" icon="chevronLeft" compact
-          onPress={() => navigate('home')} style={{ alignSelf: 'flex-start', marginBottom: 18 }} />}
-        {activityScore !== null && <GameScoreBar theme={theme} score={activityScore} />}
-        {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
-          dispatch={dispatch} finish={finish} saving={(activity === 'shapes' && recognizingShape)
-            || drawingRuns[activity].saveStatus === 'saving'}
-          onAllGames={() => navigate('home')}
-          onCanvasSize={size => { canvasSize.current = size; }}
-          shapeTarget={activity === 'shapes' ? shapeState?.target ?? 'circle' : undefined}
-          shapeIndex={shapeState?.challengeIndex ?? 0}
-          shapeCount={shapeState?.challengeCount ?? 4}
-          shapeFeedback={activity === 'shapes' ? shapeFeedback : undefined} />}
+        {screen !== 'draw' && <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACE.md }}>
+          <Button theme={theme} label="All games" icon="chevronLeft" compact onPress={() => navigate('home')} />
+          {activityScore !== null && <GameScoreBar theme={theme} score={activityScore} style={{ flex: 1 }} />}
+        </View>}
+        <View style={{ flex: 1, minHeight: 0 }}>
+          {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
+            dispatch={dispatch} finish={finish} saving={(activity === 'shapes' && recognizingShape)
+              || drawingRuns[activity].saveStatus === 'saving'}
+            onAllGames={() => navigate('home')}
+            onCanvasSize={size => { canvasSize.current = size; }}
+            shapeTarget={activity === 'shapes' ? shapeState?.target ?? 'circle' : undefined}
+            shapeIndex={shapeState?.challengeIndex ?? 0}
+            shapeCount={shapeState?.challengeCount ?? 4}
+            shapeFeedback={activity === 'shapes' ? shapeFeedback : undefined} />}
+          {screen === 'tapQuest' && <TapQuestScreen theme={theme} run={tapQuest} onStart={startTapQuest} toy={state.toy}
+            mode={tapQuestMode} onMode={mode => choose('tapQuest', mode)} autoStart={tapQuestAutoStart}
+            onAutoStarted={() => setTapQuestAutoStart(false)} />}
+          {screen === 'buttonHero' && <ButtonHeroView state={buttonHero.state} status={buttonHero.status}
+            difficulty={buttonDifficulty} theme={theme} onDifficulty={setButtonDifficulty}
+            onStart={() => buttonHero.start(createButtonHeroGame({ difficulty: buttonDifficulty }), { tickMs: 40 })}
+            onPause={buttonHero.pause} onResume={buttonHero.resume}
+            onButton={action => handleGameInput.current({ ...action, source: 'touch' })} />}
+          {screen === 'knobQuest' && <KnobQuestView state={knobQuest.state} status={knobQuest.status}
+            difficulty={knobDifficulty} theme={theme} onDifficulty={setKnobDifficulty}
+            onStart={() => {
+              knobQuestSeed.current++;
+              knobQuest.start(createKnobQuestGame(undefined, knobDifficulty, knobQuestSeed.current), { tickMs: 40 });
+            }}
+            renderPlayer={({ size, color }) => <Jimmy face size={size} color={color} />}
+            onAxis={action => handleGameInput.current({ ...action, source: 'touch' })} />}
+          {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
+            durationS={timedMs / 1000} onDuration={seconds => choose('timed', String(seconds * 1000))}
+            connected={state.connection === 'connected'} searching={state.connection === 'searching'}
+            onConnect={state.connect} virtualToy={virtualToy} />}
+        </View>
+      </View>
+    </View> : <ScrollView ref={scroll} role="main" keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ flexGrow: 1, paddingHorizontal: compact ? 10 : 30, paddingTop: compact ? 12 : 22,
+        paddingBottom: 30 }}>
+      <View style={{ width: '100%', maxWidth: screen === 'settings' ? SETTINGS.maxWidth : 1200, alignSelf: 'center',
+        backgroundColor: screen === 'settings' ? undefined : theme.sheet,
+        borderRadius: RADIUS.xl, padding: screen === 'settings' ? 0 : compact ? 14 : 30 }}>
+        {errorBanner}
         {screen === 'rewards' && <RewardsScreen theme={theme} progress={state.progress} />}
         {screen === 'settings' && <SettingsScreen theme={theme} state={state}
           replayIntro={() => { navigate('home'); setIntroDone(false); }} />}
-        {screen === 'tapQuest' && <TapQuestScreen theme={theme} run={tapQuest} onStart={startTapQuest} toy={state.toy}
-          mode={tapQuestMode} onMode={mode => choose('tapQuest', mode)} autoStart={tapQuestAutoStart}
-          onAutoStarted={() => setTapQuestAutoStart(false)} />}
-        {screen === 'buttonHero' && <ButtonHeroView state={buttonHero.state} status={buttonHero.status}
-          difficulty={buttonDifficulty} theme={theme} onDifficulty={setButtonDifficulty}
-          onStart={() => {
-            buttonHero.start(createButtonHeroGame({ difficulty: buttonDifficulty }), { tickMs: 40 });
-            if (compact) scroll.current?.scrollTo({ y: 300, animated: true });
-          }}
-          onPause={buttonHero.pause} onResume={buttonHero.resume}
-          onButton={action => handleGameInput.current({ ...action, source: 'touch' })} />}
-        {screen === 'knobQuest' && <KnobQuestView state={knobQuest.state} status={knobQuest.status}
-          difficulty={knobDifficulty} theme={theme} onDifficulty={setKnobDifficulty}
-          onStart={() => {
-            knobQuestSeed.current++;
-            knobQuest.start(createKnobQuestGame(undefined, knobDifficulty, knobQuestSeed.current), { tickMs: 40 });
-            scroll.current?.scrollTo({ y: compact ? 220 : 240, animated: true });
-          }}
-          renderPlayer={({ size, color }) => <Jimmy face size={size} color={color} />}
-          onAxis={action => handleGameInput.current({ ...action, source: 'touch' })} />}
-        {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
-          durationS={timedMs / 1000} onDuration={seconds => choose('timed', String(seconds * 1000))}
-          connected={state.connection === 'connected'} searching={state.connection === 'searching'}
-          onConnect={state.connect} virtualToy={virtualToy} />}
       </View>
     </ScrollView>}
     <Modal visible={reward !== null} transparent animationType="none" onRequestClose={() => setReward(null)}>
@@ -382,9 +395,12 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
           <Button theme={theme} label="See my rewards" icon="trophy"
             onPress={() => { setReward(null); navigate('rewards'); }} style={{ width: '100%' }} />
         </View>
+        {/* A level-up or badge from this game shows here while the dialog is up, and on the screen below otherwise. */}
+        {reward !== null && rewardToast}
       </View>
     </Modal>
     <CelebrationToast theme={theme} />
+    {reward === null && rewardToast}
     </SafeAreaView>
   </View>);
 }

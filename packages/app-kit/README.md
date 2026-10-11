@@ -42,6 +42,7 @@ Nothing else changes between them. `apps/mobile/src/toy-connector.ts` makes the 
 | `useToyState()` | Live toy state or `null`: switches, spinner angle, screw, `batteryPercent`, `charging` | Battery badge, live toy visualizer |
 | `useScoreEvents(fn)` | Every score moment (`gameStart`, `points`, `milestone`, `newBest`, `gameEnd`) from app games *and* games the toy plays by itself while connected | Sounds, mascot reactions, confetti |
 | `useCelebration()` | The big moment to show right now (`milestone`, `newBest`, `bestAtEnd`) or `null`; clears itself | An in-game celebration |
+| `useReward()` | The level-up or new badge to show right now (`{ type: 'levelUp', level }` or `{ type: 'badge', badgeId }`) or `null`; rewards from one game take turns | A reward toast |
 | `useScores({ games })` | `records`, `progress` (points, level, badges), `scoreboard` (per-game bests, today, toy vs app), `loading`, `error` | Rewards, scoreboard, home stats |
 | `useGameRun()` | `start(game)`, `state`, `score`, `remainingMs`, `status`, `saveStatus`, `record`, `pause()`, `resume()`, `quit()`, `submit(action)`, `retrySave()`, `clear()` | Any game screen |
 

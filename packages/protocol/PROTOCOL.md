@@ -50,7 +50,7 @@ loses timing detail but no movement.
 |      2 | u16  | `switches`       | Bitfield of switches currently closed (`SwitchBit`).               |
 |      4 | u16  | `pressed`        | Bits that closed at any moment since the previous packet. Catches taps shorter than one packet. |
 |      6 | i32  | `spinnerTotal`   | AS5600 spinner position, cumulative, 4096 counts per turn. Clockwise from the left = positive. |
-|     10 | i16  | `screwTotal`     | Captive-screw encoder, cumulative detents, wraps. Tighten = positive. |
+|     10 | i16  | `screwTotal`     | Captive-screw encoder, cumulative detents (24 per turn, `SCREW_DETENTS_PER_TURN`), wraps. Tighten = positive. |
 |     12 | u16  | `reserved`       | Always 0. (Was the squeeze sensor, removed from the toy.)          |
 |     14 | u16  | `timeMs`         | Low 16 bits of the fidget's millisecond clock. Used for durations. |
 |     16 | u8   | `batteryPercent` | 0-100, or 255 = unknown.                                           |
@@ -58,29 +58,42 @@ loses timing detail but no movement.
 
 ### `SwitchBit` (bit index in `switches` / `pressed`)
 
-| Bit | Name           | Hardware (D4 wiring)                     | Kind        |
+| Bit | Name           | Hardware (MCP23017 pin)                  | Kind        |
 | --: | -------------- | ---------------------------------------- | ----------- |
-|   0 | `clicker`      | S1 top clicker, MCP23017 GPA0            | momentary   |
-|   1 | `navLeft`      | S2 menu key, GPA1. "No" in prompts       | momentary   |
-|   2 | `navRight`     | S3 menu key, GPA2. "Yes" in prompts      | momentary   |
-|   3 | `rocker`       | S4 rear rocker, GPA3                     | latching    |
-|   4 | `screwHome`    | S5 screw fully in, GPA4                  | limit       |
-|   5 | `screwOut`     | S6 screw fully out, GPA5                 | limit       |
-|   6 | `sliderLow`    | S7 slider bottom end, GPB0               | limit       |
-|   7 | `sliderHigh`   | S8 slider top end, GPB1                  | limit       |
-|   8 | `stylusStowed` | S9 stylus in its bay, GPB2               | limit       |
+|   0 | `clicker`      | S1 top clicker, GPB7                     | momentary   |
+|   1 | `navLeft`      | S2 menu key, GPA0. "No" in prompts       | momentary   |
+|   2 | `navRight`     | S3 menu key, GPA1. "Yes" in prompts      | momentary   |
+|   3 | `rocker`       | S4 rear rocker (not wired yet)            | latching    |
+|   4 | `screwHome`    | S5 screw fully in (not wired yet)        | limit       |
+|   5 | `screwOut`     | S6 screw fully out (not wired yet)       | limit       |
+|   6 | `sliderLow`    | S7 slider bottom end, GPB5               | limit       |
+|   7 | `sliderHigh`   | S8 slider top end, GPB6                  | limit       |
+|   8 | `stylusStowed` | S9 stylus in its bay (not wired yet)     | limit       |
 |   9 | reserved       | Always 0. (Was the shirt-button flap, removed.) |    |
-| 10-15 | reserved     | always 0                                 |             |
+|  10 | `screwPush`    | Captive-screw encoder's push switch, GPA2 | momentary  |
+| 11-15 | reserved     | always 0                                 |             |
+
+Older apps ignore bits they don't know, so new switch bits don't change
+`protocolVersion`.
 
 ### `FidgetMode`
 
 | Value | Name         | Who drives the display and haptics                         |
 | ----: | ------------ | ---------------------------------------------------------- |
 |     1 | `standalone` | The fidget: its own menu and basic games. Default at boot. |
-|     2 | `app`        | The app: the fidget only shows what the app sends.         |
+|     2 | `app`        | The app: the fidget only shows what the app sends, and plays the app's `haptic` and `scoreEvent` commands. |
 
 The fidget returns to `standalone` by itself when the BLE link drops, so a
 child is never left with a frozen screen.
+
+**Input feedback is always the toy's own**, in both modes and while it asks
+"connect?", so it has no Bluetooth delay: a sharp tap (effect 4) the moment a
+button, a slider end, the rocker (either way) or the screw's push closes, and a
+rumble while the spinner or the screw turns (DRV2605L real-time playback,
+stronger the faster it turns, gone about 150 ms after it stops). Effect
+sequences (celebrations, `haptic` commands) take priority over the rumble,
+which resumes when they finish; a tap never cuts a celebration short. Apps
+should not send a haptic just to confirm a press.
 
 ### `InputFlag`
 
@@ -200,7 +213,7 @@ the game decides when they happen, using these rules:
 | --- | --- | --- |
 | 1 `gameStart` | The game starts | best score before this game (0 = none) |
 | 2 `points`    | The score goes up | points just added |
-| 3 `milestone` | The score reaches each multiple of 100 (`POINTS_PER_MILESTONE`) | the multiple reached, e.g. 200 |
+| 3 `milestone` | The score reaches 100, 500, 1000, 1500, 2000, 3000, then every 1000 (4000, 5000, …). `MILESTONE_SCORES`, `nextMilestoneAfter` | the milestone reached, e.g. 500 |
 | 4 `newBest`   | The score first passes the previous best, if there was one | the best that was just beaten |
 | 5 `gameEnd`   | The game ends | best score before this game |
 
@@ -212,16 +225,17 @@ produce `points`, then any `milestone`s, then `newBest`, in that order.
 - **Toy game, phone connected:** the toy sends `scoreEvent` messages, so the
   app can celebrate too. They don't replace the `record` at the end.
 
-What the toy does for each (firmware `animations.cpp`; the haptic names match
-the app's `Feedback`):
+What the toy does for each (firmware `celebration.cpp`; DRV2605L effect ids,
+named in "DRV2605L effects" below). `gameStart` and `points` have no haptic:
+the move that caused them already got the toy's own tap or rumble.
 
 | Kind | Toy screen | Haptic |
 | --- | --- | --- |
-| `gameStart` | "GO!" burst (0.7 s) | tap (7) |
-| `points` | "+N" pops up in the corner (0.35 s) | tick (24) |
-| `milestone` | sparkles + "AMAZING JOB! N POINTS" (2 s) | success (10) |
-| `newBest` | flashing "NEW HIGH SCORE!" with expanding rings (2.5 s) | celebrate (12, 14) |
-| `gameEnd` | the result screen | success (10), or celebrate if it was a new best |
+| `gameStart` | "GO!" burst (0.7 s) | none |
+| `points` | "+N" pops up in the corner (0.35 s) | none |
+| `milestone` | sparkles + "AMAZING JOB! N POINTS" (2 s) | grows with the milestone: 100 → 10; 500 → 12; 1000-2000 → 12, 47; 3000 and up → 12, 14 |
+| `newBest` | flashing "NEW HIGH SCORE!" with expanding rings (2.5 s) | 14, 12, 14 (the strongest) |
+| `gameEnd` | the result screen: the score with sparkles, then Jimmy rolls in, pushes it aside, smiles and hops; "NEW BEST!" if it was (4.2 s) | 10, or 12, 14 if it was a new best |
 
 A bigger animation is never cut short by a smaller one (`newBest` >
 `milestone` > `gameEnd` > `gameStart` > `points`).
@@ -261,33 +275,45 @@ A bigger animation is never cut short by a smaller one (`newBest` >
 
 | Id | Name        | App game id         | Rules (firmware `basic_modes.cpp` is the authority) |
 | -: | ----------- | ------------------- | ---------------------------------------------------- |
-|  1 | `freePlay`  | `fidget-free-play`  | The default game. The first move starts it and scores. +10 per move (see below). Ends 20 s after the last move, or at 3 min. The toy celebrates every 100 points. |
-|  2 | `spinCount` | `fidget-spin-count` | Needs the spinner. The first move starts a 30 s clock. +10 per full spinner turn, either direction. |
+|  1 | `freePlay`  | `fidget-free-play`  | The default game. The first move starts it and scores. +10 per press, rocker flip, slider end or stylus out; +5 per 90° spin or screw quarter turn (see "One move"). |
+|  2 | `spinCount` | `fidget-spin-count` | Needs the spinner or the screw. The first move starts it. Only turning scores: +5 per 90° spin or screw quarter turn, either direction. `actions` counts those turns. |
+
+Both games end the same way, with no fixed clock: after 2 s with no move the
+toy shows a bar that runs down for 1 s; a move then carries on as normal, and
+otherwise the game ends (`completed`). No game runs longer than 3 min. The toy
+celebrates milestones (see "Score events").
 
 Ids 1-63 are reserved for firmware basic modes.
 
 **One move** means the same on the toy and in the app (firmware `BasicGame::countMoves`,
-app `createToyActionTracker`): a press of the clicker or a menu key, the rocker
-flipping either way, a slider end, taking the stylus out, a 90° spin (measured
-from the last counted position, so sensor jitter never adds up), or one screw
-detent. Screw limit switches and putting the stylus back are positions, not
-moves.
+app `createToyActionTracker`): a press of the clicker, a menu key or the screw knob, the rocker
+flipping either way, a slider end, taking the stylus out, a 90° spin of the
+spinner, or a quarter turn of the screw (6 of its 24 detents). Spins and screw
+turns are measured from the last counted position, so sensor jitter or
+wiggling the screw by a detent never adds up. Screw limit switches and putting
+the stylus back are positions, not moves.
 
 The toy stores up to 200 finished games in flash until the app syncs them; when
 full, the oldest is overwritten.
 
-## DRV2605L effects used by the app
+## DRV2605L effects
 
-Verified against the TI datasheet effect list (ROM library; use library 6 for the
-LRA). `packages/core/src/device/feedback.ts` names them.
+Every ROM effect the app and the toy use, verified against the TI datasheet
+effect list (ROM library; use library 6 for the LRA).
+`packages/core/src/device/feedback.ts` names them for the app (`HapticEffect`,
+`Feedback`); the firmware uses them in `celebration.cpp` and `haptic_feedback.h`.
 
-| Id | Datasheet name           |
-| -: | ------------------------ |
-|  1 | Strong Click - 100%      |
-|  4 | Sharp Click - 100%       |
-|  7 | Soft Bump - 100%         |
-| 10 | Double Click - 100%      |
-| 12 | Triple Click - 100%      |
-| 14 | Strong Buzz - 100%       |
-| 24 | Sharp Tick 1 - 100%      |
-| 47 | Buzz 1 - 100%            |
+| Id | Datasheet name                         | Used for |
+| -: | -------------------------------------- | -------- |
+|  1 | Strong Click - 100%                    | app `levelUp` (1, 1, 14) |
+|  4 | Sharp Click - 100%                     | toy: a press (input tap) |
+|  7 | Soft Bump - 100%                       | app `tap`; toy: "connect?" asks for attention |
+| 10 | Double Click - 100%                    | app `success`; toy: milestone 100, game end |
+| 12 | Triple Click - 100%                    | app `celebrate` (12, 14); toy: milestones from 500, new best, game end with a best |
+| 14 | Strong Buzz - 100%                     | app `celebrate`, `levelUp`; toy: milestones from 3000, new best |
+| 24 | Sharp Tick 1 - 100%                    | app `tick`, `nudge` |
+| 37 | Long Double Sharp Click Strong 1 - 100% | app `badge` (37, 37) |
+| 47 | Buzz 1 - 100%                          | toy: milestones 1000-2000 |
+
+The toy's rumble is not a ROM effect: it is real-time playback (RTP) with the
+amplitude set from the turning speed.

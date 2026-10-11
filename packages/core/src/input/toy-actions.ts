@@ -1,3 +1,4 @@
+import { SCREW_DETENTS_PER_TURN } from '@jimmyit/protocol';
 import type { FidgetEvent } from './types';
 
 /**
@@ -16,6 +17,12 @@ export interface ToyActionOptions {
    * jitter around one spot never adds up to a spin.
    */
   readonly spinStepDeg?: number;
+  /**
+   * Captive-screw detents that count as one screw move, either direction.
+   * Default 6, a quarter turn of the 24-detent encoder. Measured from the last
+   * counted position like spins, so turning back and forth by a detent never adds up.
+   */
+  readonly screwStepDetents?: number;
 }
 
 /** Turns raw FidgetEvents into ToyActions. Keep one per game run. */
@@ -27,8 +34,11 @@ export interface ToyActionTracker {
 
 export function createToyActionTracker(options: ToyActionOptions = {}): ToyActionTracker {
   const spinStepDeg = options.spinStepDeg ?? 90;
+  const screwStepDetents = options.screwStepDetents ?? SCREW_DETENTS_PER_TURN / 4;
   if (!(spinStepDeg > 0)) throw new RangeError(`spinStepDeg must be > 0, got ${spinStepDeg}`);
+  if (!(screwStepDetents > 0)) throw new RangeError(`screwStepDetents must be > 0, got ${screwStepDetents}`);
   let anchorDeg: number | null = null;
+  let screwAnchor: number | null = null;
 
   return {
     onEvent(event) {
@@ -38,6 +48,7 @@ export function createToyActionTracker(options: ToyActionOptions = {}): ToyActio
             case 'clicker':
             case 'navLeft':
             case 'navRight':
+            case 'screwPush':
               return ['press'];
             case 'rocker':
               return ['toggle'];
@@ -58,14 +69,20 @@ export function createToyActionTracker(options: ToyActionOptions = {}): ToyActio
           anchorDeg = anchor + Math.sign(offset) * spins * spinStepDeg;
           return Array<ToyAction>(spins).fill('spin');
         }
-        case 'screw':
-          return Array<ToyAction>(Math.abs(event.deltaDetents)).fill('screw');
+        case 'screw': {
+          const anchor = screwAnchor ?? event.position - event.deltaDetents;
+          const offset = event.position - anchor;
+          const turns = Math.floor(Math.abs(offset) / screwStepDetents);
+          screwAnchor = anchor + Math.sign(offset) * turns * screwStepDetents;
+          return Array<ToyAction>(turns).fill('screw');
+        }
         default:
           return [];
       }
     },
     reset() {
       anchorDeg = null;
+      screwAnchor = null;
     },
   };
 }

@@ -1,14 +1,16 @@
 // JimmyIt fidget firmware. Board: "Seeed nRF52 Boards" > "Seeed XIAO nRF52840".
 //
 // Grew out of the KnightHacks breadboard sketch "Fidget Quest": same screens and
-// +10-points-per-move game, now non-blocking, saved to flash, and talking to the
+// points-per-move game, now non-blocking, saved to flash, and talking to the
 // app over Bluetooth (spec: packages/protocol/PROTOCOL.md).
 //
 // - Without the app the toy plays by itself: the first move starts Free Play and
-//   scores; the game ends once the child takes too long for the next move.
-//   Every game is saved to flash and uploaded the next time the app connects.
-// - Score moments (game start, points, every 100, new high score, game end) play
-//   an animation and a haptic, whether the toy or the app is running the game.
+//   scores; after 2 s with no move a bar runs down for 1 s, and the game ends
+//   unless the child moves again. Every game is saved to flash and uploaded the
+//   next time the app connects.
+// - Score moments (game start, points, milestones, new high score, game end) play
+//   an animation, and the big ones a haptic, whether the toy or the app runs the game.
+// - Every press taps and every spin or screw turn rumbles, in every mode.
 // - A phone may only connect once the child says yes on the toy (left = no,
 //   right = yes); approved phones are remembered.
 //
@@ -31,7 +33,9 @@
 #include "src/celebration.h"
 #include "src/connection_approval.h"
 #include "src/fidget_protocol.h"
+#include "src/haptic_feedback.h"
 #include "src/input_helpers.h"
+#include "src/result_animation.h"
 #include "src/score_events.h"
 #include "src/score_log.h"
 
@@ -41,7 +45,7 @@ enum class Screen : uint8_t { Welcome, Instructions, Ready, Playing, Result, Not
 
 constexpr uint32_t kWelcomeMs = 5000;
 constexpr uint32_t kInstructionsMs = 10000;
-constexpr uint32_t kResultMs = 4000;
+constexpr uint32_t kResultMs = jimmyit::ResultAnimation::kTotalMs;  // the score, then Jimmy's hop
 constexpr uint32_t kNoticeMs = 2000;
 constexpr uint32_t kForgetPhonesHoldMs = 5000;
 constexpr uint32_t kDeclineDisconnectDelayMs = 300;  // lets the "declined" message go out first
@@ -50,10 +54,10 @@ constexpr uint32_t kMinNotifyGapMs = 20;  // at most 50 input notifications a se
 constexpr uint32_t kHeartbeatMs = 1000;
 
 // Games the toy offers by itself; the menu keys pick one on the Ready screen.
-// Spin Count needs the spinner sensor, so the breadboard only has Free Play.
+// Spin Count needs the spinner sensor or the screw, so the breadboard only has Free Play.
 constexpr uint8_t kToyGames[] = {
     BasicModeId::kFreePlay,
-#if JIMMYIT_HAS_AS5600
+#if JIMMYIT_HAS_AS5600 || JIMMYIT_HAS_ENCODER
     BasicModeId::kSpinCount,
 #endif
 };
@@ -68,7 +72,8 @@ Screen screen = Screen::Welcome;
 uint32_t screenStartMs = 0;
 bool redraw = true;
 size_t selectedGame = 0;
-uint32_t secondsLeftShown = 0;
+bool graceShown = false;  // the Playing screen shows the bar that runs down before the game ends
+uint32_t lastScreenFrameMs = 0;
 bool linked = false;
 
 uint8_t fidgetMode = FidgetMode::kStandalone;
@@ -96,6 +101,8 @@ uint32_t bothMenuKeysSinceMs = 0;
 
 SwitchDebouncer debouncer(kDebounceMs);
 SpinnerTracker spinner;
+RumbleEnvelope rumble;
+bool inputsStarted = false;  // the first reading is only the debounce baseline: no tap for a switch already closed
 InputPacket current = {};
 InputPacket lastSent = {};
 bool sentOnce = false;
@@ -138,7 +145,7 @@ const char* gameTitle(uint8_t modeId) { return modeId == BasicModeId::kSpinCount
 // playing wins, and then this moment stays quiet (no haptic either).
 void celebrate(uint8_t kind, uint32_t score, uint32_t value, uint32_t nowMs, bool newBestAtEnd = false) {
   if (!celebration.start(kind, score, value, nowMs, newBestAtEnd)) return;
-  const CelebrationStyle style = celebrationStyle(kind, newBestAtEnd);
+  const CelebrationStyle style = celebrationStyle(kind, value, newBestAtEnd);
   hapticsPlay(style.effects, style.effectCount);
   lastFrameMs = 0;  // draw the first frame now
 }
@@ -168,6 +175,7 @@ void emitScoreChanges(uint32_t nowMs) {
 void armGame(uint32_t nowMs) {
   game.arm(kToyGames[selectedGame], nowMs, clockSet ? unixNow(nowMs) : nowMs / 1000, clockSet);
   pressedForGame = 0;
+  graceShown = false;
   goTo(Screen::Ready, nowMs);
 }
 
@@ -371,12 +379,18 @@ void handleCommand(const CommandBytes& bytes, uint32_t nowMs) {
 
 // ---- Input ----------------------------------------------------------------
 
+// Reads every part, and gives the hands their feedback straight away: a tap for
+// a press, a rumble while the spinner or the screw turns (any mode).
 void readInputs(uint32_t nowMs) {
   const RawInputs raw = inputsRead();
+  const uint16_t stableBefore = debouncer.stable();
   const uint16_t newlyPressed = debouncer.update(raw.closedSwitches, nowMs);
   pressedForNotify |= newlyPressed;
   pressedForGame |= newlyPressed;
   if (raw.spinnerValid) spinner.update(raw.spinnerRaw);
+  if (inputsStarted && inputTaps(stableBefore, debouncer.stable())) hapticsTap();
+  hapticsUpdate(rumble.update(spinner.total(), raw.screwDetents, nowMs), nowMs);
+  inputsStarted = true;
 
   const bool awaitingApproval = approval.state() == ConnectionApproval::State::kWaitingForHello || approval.asking();
   current.mode = fidgetMode;
@@ -476,15 +490,16 @@ void updateStandalone(uint32_t nowMs) {
         redraw = true;
       }
       if (game.isFinished()) {
+        graceShown = false;
         recordFinishedGame();
         emitScoreEvent(scoreEvents.end(), nowMs, resultNewBest);
         if (resultScore > 0) goTo(Screen::Result, nowMs);
         else armGame(nowMs);  // no "0 points" screen
         break;
       }
-      const uint32_t secondsLeft = (game.remainingMs(nowMs) + 999) / 1000;
-      if (secondsLeft != secondsLeftShown) {
-        secondsLeftShown = secondsLeft;
+      const bool inGrace = game.graceRemaining(nowMs) >= 0.0f;
+      if (inGrace != graceShown) {
+        graceShown = inGrace;
         redraw = true;
       }
       break;
@@ -503,15 +518,13 @@ void updateStandalone(uint32_t nowMs) {
 
 // ---- Drawing ----------------------------------------------------------------
 
-void drawScreen() {
+void drawScreen(uint32_t nowMs) {
   switch (screen) {
     case Screen::Welcome: uiWelcome(); break;
     case Screen::Instructions: uiInstructions(); break;
     case Screen::Ready: uiReady(gameTitle(kToyGames[selectedGame]), kToyGameCount > 1, linked); break;
-    case Screen::Playing:
-      uiPoints(game.score(), linked, game.modeId() == BasicModeId::kSpinCount ? static_cast<int32_t>(secondsLeftShown) : -1);
-      break;
-    case Screen::Result: uiResult(resultScore, resultNewBest); break;
+    case Screen::Playing: uiPoints(game.score(), linked, graceShown ? game.graceRemaining(nowMs) : -1.0f); break;
+    case Screen::Result: uiResult(resultScore, resultNewBest, nowMs - screenStartMs); break;
     case Screen::Notice: uiNotice(noticeText); break;
     case Screen::App: uiApp(appDisplay); break;
   }
@@ -536,7 +549,7 @@ void render(uint32_t nowMs) {
     if (celebration.fullScreen()) {
       uiCelebration(celebration.kind(), celebration.score(), celebration.value(), elapsed);
     } else {
-      drawScreen();
+      drawScreen(nowMs);
       uiPointsPop(celebration.value(), elapsed);
     }
     uiFlush();
@@ -546,9 +559,13 @@ void render(uint32_t nowMs) {
     wasAnimating = false;
     redraw = true;
   }
+  // The result screen's sparkles and the running-down bar move every frame.
+  const bool screenAnimates = screen == Screen::Result || (screen == Screen::Playing && graceShown);
+  if (screenAnimates && nowMs - lastScreenFrameMs >= kAnimationFrameMs) redraw = true;
   if (!redraw) return;
   redraw = false;
-  drawScreen();
+  lastScreenFrameMs = nowMs;
+  drawScreen(nowMs);
   uiFlush();
 }
 
@@ -557,6 +574,7 @@ void render(uint32_t nowMs) {
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  Wire.setClock(400000);  // every part on the bus does 400 kHz; keeps the polled encoder from missing steps
 
   inputsBegin();
   if (!uiBegin()) Serial.println("OLED initialization failed!");

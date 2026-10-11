@@ -266,13 +266,15 @@ These exist because the players are children with motor differences.
   lives in `app-kit` and `games/*`, so a redesign only replaces screens.
   Development builds and web previews use the virtual toy; Bluetooth is not
   wired into the app yet. Give `apps/mobile` its owner in CODEOWNERS.
-- Firmware: runs the breadboard (one button on D0 plus the OLED) with
-  Bluetooth, flash storage of up to 200 offline games, and the default game
-  (the first move starts Free Play; 20 s with no move ends it). Code for the
-  full toy (and the Spin Count menu on the nav keys) sits behind flags in
-  `board_config.h`; it compiles but hasn't run on hardware. Score moments
-  play animations and haptics on the toy; a phone must be approved on the toy
-  (left = no, right = yes); battery reading is in behind `JIMMYIT_HAS_BATTERY`.
+- Firmware: runs the full toy (2026-10): buttons, slider and the encoder's
+  push and turn on the MCP23017, the AS5600 spinner, the OLED, the DRV2605L
+  and the battery, all switched on in `board_config.h`. It has Bluetooth,
+  flash storage of up to 200 offline games, and the toy's own games: the first
+  move starts Free Play (or Spin Count, picked with the menu keys); after 2 s
+  with no move a grace bar runs down for 1 s, and the game ends when it
+  empties. Every press taps and every turn rumbles on the toy itself; score
+  moments play animations and haptics; a phone must be approved on the toy
+  (left = no, right = yes).
 - The squeeze sensor and the shirt-button flap were removed from the toy
   (2026-10). Their protocol fields are reserved, always 0.
 - Bluetooth is wired into the app (`apps/mobile/src/bluetooth.ts`, used in

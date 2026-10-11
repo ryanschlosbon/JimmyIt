@@ -3,8 +3,8 @@
 Knob Quest practices coordinating two controls. The player is Jimmy, who rolls
 as he moves, stretches when he flies, squashes when he lands and throws sparks
 when he takes off. One control rolls him left or right; the other lifts him
-against gravity. On the toy, the spinner rolls and the screw lifts, and turning
-faster pushes harder. Every run generates a new, repeatable route from a seed.
+against gravity. On the toy, the spinner rolls and the knob (the rotary encoder,
+24 clicks a turn) lifts, and turning faster pushes harder. Every run generates a new, repeatable route from a seed.
 
 Easy has a solid floor. Normal cuts small holes in the floor under some
 platforms; hard cuts big ones plus a stretch with no floor at all, where the
@@ -22,9 +22,11 @@ play.
 The rules accept `{ type: 'axis', axis, value }` with values from -1 to 1 from
 the view and keyboard, and read the toy's `spin` and `screw` events directly as
 "turning energy" that fades over 250 ms: about 480 degrees a second of spinning,
-or 8 screw detents a second, is full speed. `analogToAxis`, `rotaryToAxis` and
+or 8 knob clicks (a third of a turn) a second, is full speed. `analogToAxis`, `rotaryToAxis` and
 `directionalToAxis` remain for other sources. The app draws Jimmy and passes him
-to the view as `renderPlayer`; without it the view draws a plain face.
+to the view as `renderPlayer`; without it the view draws a plain face. The view
+fills the space the app gives it and scales the world evenly, so the play area
+always fits the screen and Jimmy stays round.
 
 The game does not require the toy. It saves platform, restart, lives-left and
 completion time metrics through the game runner.

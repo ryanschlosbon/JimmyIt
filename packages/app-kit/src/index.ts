@@ -20,6 +20,7 @@ export {
   createConnectionManager,
 } from './connection';
 export { type Progress, type Badge, type BadgeId, POINTS_PER_LEVEL, getProgress, longestStreakDays } from './progress';
+export { type Reward, progressRewards } from './rewards';
 export { type Scoreboard, type ScoreboardRow, getScoreboard } from './scoreboard';
 export { type CatalogEntry, TOY_GAMES, catalogEntry, createGameCatalog } from './catalog';
 export {
@@ -31,6 +32,7 @@ export {
   useGameRun,
   useScoreEvents,
   useCelebration,
+  useReward,
   type Celebration,
   type CelebrationKind,
   type ConnectionControls,

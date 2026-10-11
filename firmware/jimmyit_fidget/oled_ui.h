@@ -27,9 +27,11 @@ void uiWelcome();
 void uiInstructions();
 // The selected toy game, waiting for the child's first move.
 void uiReady(const char* gameTitle, bool showMenuHint, bool linked);
-// secondsLeft < 0 for games without a clock (Free Play).
-void uiPoints(uint32_t points, bool linked, int32_t secondsLeft);
-void uiResult(uint32_t points, bool newBest);
+// graceRemaining: 1 → 0 while the game is about to end for lack of a move (a bar
+// runs down); negative while play is going on ("KEEP PLAYING!").
+void uiPoints(uint32_t points, bool linked, float graceRemaining);
+// The final score with sparkles (and "NEW BEST!"); redraw it every frame.
+void uiResult(uint32_t points, bool newBest, uint32_t elapsedMs);
 void uiApp(const AppDisplay& app);
 // "CONNECT TO <NAME>?" with the menu-key answers (or "CLICK = YES" without them).
 void uiApprovalPrompt(const char* phoneName, uint32_t secondsLeft, bool hasMenuKeys);

@@ -61,7 +61,7 @@ export interface GameRun<TState, TAction = never> {
   /** Called whenever state, score or status may have changed. */
   subscribe(listener: Listener<void>): Unsubscribe;
   /**
-   * Moments to celebrate on screen: gameStart, points, milestone (every 100),
+   * Moments to celebrate on screen: gameStart, points, milestone (100, 500, 1000, 1500, 2000, 3000, then every 1000),
    * newBest (passing the old best), gameEnd. The toy gets the same moments.
    */
   onScoreEvent(listener: Listener<ScoreEvent>): Unsubscribe;

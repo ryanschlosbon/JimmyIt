@@ -82,7 +82,7 @@ Where the toy comes from (`src/toy-connector.ts`):
 | Release build | Real toy over Bluetooth (`react-native-ble-plx`, needs a development or release build, not Expo Go) |
 
 Connecting asks the child on the toy first ("Say yes on Jimmy ▶" in the
-header). Big score moments (every 100 points, a new high score), from app
+header). Big score moments (milestones at 100, 500, 1000, 1500, 2000, 3000 and every 1000 after; a new high score), from app
 games or the toy's own games, show `src/components/CelebrationOverlay.tsx`,
 which is a placeholder look driven by app-kit's `useCelebration()`.
 

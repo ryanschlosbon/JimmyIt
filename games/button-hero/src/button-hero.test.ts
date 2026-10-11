@@ -40,7 +40,7 @@ describe('Button Hero', () => {
         const previous = song[index];
         expect(note.atMs - (previous ? previous.atMs + previous.holdMs : 0)).toBeGreaterThanOrEqual(2_000);
       });
-      expect(new Set(song.map(note => note.move))).toEqual(new Set(['click', 'left', 'right', 'spin']));
+      expect(new Set(song.map(note => note.move))).toEqual(new Set(['click', 'left', 'right', 'strum', 'spin']));
     });
   });
 
@@ -71,6 +71,40 @@ describe('Button Hero', () => {
     h.advance(400);
     expect(h.run.getState().riffProgress[2]).toBe(1);
     expect(h.run.getState().perfect).toBe(3);
+  });
+
+  it('strums with the slider and keeps a riff going with the knob', async () => {
+    const h = await createGameTestHarness(createButtonHeroGame({ notes: [
+      { move: 'strum', atMs: 3_500, holdMs: 0 },
+      { move: 'strum', atMs: 4_500, holdMs: 0 },
+      { move: 'spin', atMs: 6_000, holdMs: 1_000 },
+    ] }));
+    h.advance(3_500);
+    h.fidget.press('sliderHigh'); // slid up to the top end
+    h.advance(1_000);
+    h.fidget.release('sliderHigh');
+    h.fidget.press('sliderLow'); // and back down
+    expect(h.run.getState().perfect).toBe(2);
+    h.advance(1_000);
+    for (let i = 0; i < 12; i++) {
+      h.fidget.turnScrew(1);
+      h.advance(100);
+    }
+    h.advance(400);
+    expect(h.run.getState().riffProgress[2]).toBe(1);
+    expect(h.run.getState().perfect).toBe(3);
+  });
+
+  it('cheers only perfect hits; the toy taps for every press by itself', async () => {
+    const h = await createGameTestHarness(game());
+    h.advance(3_250); // 250 ms early: good, not perfect
+    h.fidget.tap('clicker');
+    expect(h.run.getState().good).toBe(1);
+    expect(h.fidget.haptics).toHaveLength(0);
+    h.advance(1_250);
+    h.fidget.tap('navLeft');
+    expect(h.run.getState().perfect).toBe(1);
+    expect(h.fidget.haptics).toHaveLength(1);
   });
 
   it('expires missed notes without reducing score', async () => {

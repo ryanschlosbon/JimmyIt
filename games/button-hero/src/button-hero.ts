@@ -1,8 +1,8 @@
 import { defineGame, type FidgetEvent, type GameSession } from '@jimmyit/game-sdk';
 
 export type ButtonHeroDifficulty = 'easy' | 'normal' | 'hard';
-/** The toy moves a note can ask for: the clicker, the two nav keys, and the spinner. */
-export const BUTTON_HERO_MOVES = ['click', 'left', 'right', 'spin'] as const;
+/** The toy moves a note can ask for: the clicker, the two nav keys, a slider strum, and spinning. */
+export const BUTTON_HERO_MOVES = ['click', 'left', 'right', 'strum', 'spin'] as const;
 export type ButtonHeroMove = (typeof BUTTON_HERO_MOVES)[number];
 /** `holdMs` > 0 makes a spin riff: keep spinning for that long. Other moves are single presses. */
 export interface ButtonHeroNote { readonly move: ButtonHeroMove; readonly atMs: number; readonly holdMs: number; }
@@ -42,12 +42,14 @@ const SETTINGS = {
   hard: { gapMs: 1_500, goodMs: 280, perfectMs: 140, riffMs: 1_200, travelMs: 4_200 },
 } as const;
 const COUNTDOWN_MS = 3_000;
-const SONG: readonly ButtonHeroMove[] = ['click', 'left', 'right', 'click', 'spin', 'left', 'right', 'click',
-  'left', 'spin', 'right', 'click', 'left', 'right', 'spin', 'click'];
+const SONG: readonly ButtonHeroMove[] = ['click', 'left', 'right', 'strum', 'click', 'spin', 'left', 'strum',
+  'right', 'click', 'spin', 'strum', 'left', 'right', 'click', 'strum', 'spin', 'click'];
 /** A toy spin counts as "still spinning" for this long after its last event. */
 const SPIN_HOLD_MS = 350;
 const RIFF_POINTS = 150;
-const SWITCH_MOVES: Readonly<Partial<Record<string, ButtonHeroMove>>> = { clicker: 'click', navLeft: 'left', navRight: 'right' };
+// Pushing the slider to either end is a strum.
+const SWITCH_MOVES: Readonly<Partial<Record<string, ButtonHeroMove>>> = { clicker: 'click', navLeft: 'left',
+  navRight: 'right', sliderLow: 'strum', sliderHigh: 'strum' };
 
 function buildSong(settings: (typeof SETTINGS)[ButtonHeroDifficulty]): ButtonHeroNote[] {
   let atMs = COUNTDOWN_MS + 2_000;
@@ -74,8 +76,8 @@ export function createButtonHeroGame(options: ButtonHeroOptions = {}) {
   return defineGame<ButtonHeroState, ButtonHeroAction>({
     id: `button-hero-${difficulty}`,
     title: 'Button Hero',
-    description: 'Click, press left or right, or spin as each note reaches the ring.',
-    skills: ['press', 'spin'],
+    description: 'Click, press left or right, strum the slider, or spin as each note reaches the ring.',
+    skills: ['press', 'slide', 'spin', 'screw'],
     needsToy: false,
     durationMs,
     starThresholds: [100, 700, 1_400],
@@ -134,7 +136,8 @@ export function createButtonHeroGame(options: ButtonHeroOptions = {}) {
           const fraction = Math.min(1, (spunMs[index] ?? 0) / note.holdMs);
           const points = Math.round(fraction * RIFF_POINTS / 10) * 10;
           judge(fraction >= 0.75 ? 'perfect' : fraction >= 0.25 ? 'good' : 'miss', nowMs, points);
-          if (fraction >= 0.25) session.feedback(fraction >= 0.75 ? 'success' : 'tap');
+          // Spinning already rumbles on the toy; a well-played riff adds a little cheer on top.
+          if (fraction >= 0.75) session.feedback('success');
         });
         elapsedMs = Math.max(elapsedMs, nowMs);
       };
@@ -162,7 +165,8 @@ export function createButtonHeroGame(options: ButtonHeroOptions = {}) {
         const isPerfect = nearest <= settings.perfectMs;
         judge(isPerfect ? 'perfect' : 'good', nowMs,
           (isPerfect ? 100 : 50) + Math.min(50, Math.floor(combo / 5) * 10));
-        session.feedback(isPerfect ? 'success' : 'tap');
+        // The toy taps on every press by itself; a perfect hit adds a little cheer on top.
+        if (isPerfect) session.feedback('success');
       };
 
       const setSpinHeld = (held: boolean) => {
@@ -183,12 +187,13 @@ export function createButtonHeroGame(options: ButtonHeroOptions = {}) {
           if (action.move === 'spin') setSpinHeld(action.pressed);
           else if (action.pressed) press(action.move);
         },
-        // The real toy: the clicker and nav keys are presses; spinner movement keeps a riff going.
+        // The real toy: the clicker and nav keys are presses, the slider strums, and turning the knob (or the
+        // spinner) keeps a riff going.
         onEvent(event: FidgetEvent) {
           if (event.type === 'switchDown') {
             const move = SWITCH_MOVES[event.switchId];
             if (move) press(move);
-          } else if (event.type === 'spin') {
+          } else if (event.type === 'spin' || event.type === 'screw') {
             const nowMs = session.elapsedMs();
             advance(nowMs);
             spinUntilMs = nowMs + SPIN_HOLD_MS;

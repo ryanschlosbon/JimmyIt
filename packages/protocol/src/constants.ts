@@ -18,6 +18,8 @@ export const INPUT_PACKET_BYTES = 18;
 export const DEVICE_INFO_BYTES = 16;
 
 export const SPINNER_COUNTS_PER_TURN = 4096;
+/** Captive-screw encoder detents in one full turn; a quarter turn (one move) is 6. */
+export const SCREW_DETENTS_PER_TURN = 24;
 export const BATTERY_UNKNOWN = 255;
 
 export const SwitchBit = {
@@ -31,6 +33,8 @@ export const SwitchBit = {
   sliderHigh: 7,
   stylusStowed: 8,
   // Bit 9 was the shirt-button flap (removed from the toy); now reserved, always 0.
+  /** Pushing the captive-screw encoder's knob. */
+  screwPush: 10,
 } as const;
 export type SwitchId = keyof typeof SwitchBit;
 export const SWITCH_IDS: readonly SwitchId[] = [
@@ -43,6 +47,7 @@ export const SWITCH_IDS: readonly SwitchId[] = [
   'sliderLow',
   'sliderHigh',
   'stylusStowed',
+  'screwPush',
 ];
 
 export const FidgetMode = {
@@ -118,9 +123,6 @@ export const ScoreEventKind = {
   gameEnd: 5,
 } as const;
 export type ScoreEventKindName = keyof typeof ScoreEventKind;
-
-/** A milestone event fires at every multiple of this score. */
-export const POINTS_PER_MILESTONE = 100;
 
 export const ApprovalStatus = {
   declined: 0,

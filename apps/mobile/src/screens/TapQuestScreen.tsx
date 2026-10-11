@@ -27,6 +27,8 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
   const { width } = useWindowDimensions();
   const compact = width < SIZE.compactWidth;
   const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
+  // The board is the biggest square that fits the space left on screen, so it never needs scrolling.
+  const [boardSide, setBoardSide] = useState(0);
   const [stylusPaused, setStylusPaused] = useState(false);
   const [starting, setStarting] = useState(false);
   const [patternMessage, setPatternMessage] = useState<string | null>(null);
@@ -80,11 +82,11 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
   const recall = state?.memoryPhase === 'recall';
   const windowMs = state ? state.settings.targetDurationMs + (state.feedback.generousTiming ? state.settings.timingWindowMs : 0) : 1;
 
-  return <View style={{ gap: SPACE.xl }}>
-    <ActivityHeader theme={theme} activity="tapQuest" title="Tap Quest" />
+  return <View style={{ flex: 1, gap: SPACE.md }}>
+    <ActivityHeader theme={theme} activity="tapQuest" title="Tap Quest" slim />
 
     {toy.connected && <View style={{ backgroundColor: stylusInJimmy ? theme.softCoral : theme.softMint, borderRadius: RADIUS.md,
-      padding: SPACE.lg, flexDirection: 'row', gap: SPACE.md, alignItems: 'center' }}>
+      paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, flexDirection: 'row', gap: SPACE.md, alignItems: 'center' }}>
       <Icon name="toy" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {stylusPaused ? 'The stylus is back in Jimmy, so we paused. Take it out and tap Resume.'
@@ -94,16 +96,19 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
       </Body></View>
     </View>}
 
-    {!active && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.md }}>
+    {!active && <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.md }}>
       {TAP_QUEST_MODES.map(option => <Button key={option.mode} theme={theme} label={option.title}
         selected={mode === option.mode} color={mode === option.mode ? theme.mint : undefined}
         onPress={() => onMode(option.mode)} disabled={saveStatus === 'saving'} compact />)}
+      <View style={{ flexBasis: 240, flexGrow: 1 }}>
+        <Body theme={theme} small>{TAP_QUEST_MODES.find(option => option.mode === mode)?.caption}</Body>
+      </View>
     </View>}
-    {!active && <Body theme={theme} small>{TAP_QUEST_MODES.find(option => option.mode === mode)?.caption}</Body>}
 
-    <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: TAP_QUEST_VIEW.borderWidth,
-      borderRadius: RADIUS.lg, padding: compact ? SPACE.md : SPACE.xl, gap: SPACE.lg, alignItems: 'center' }}>
-      {state && active && <View style={{ width: '100%', maxWidth: TAP_QUEST_VIEW.boardMaxWidth, gap: SPACE.sm }}>
+    <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.surface, borderColor: theme.border,
+      borderWidth: TAP_QUEST_VIEW.borderWidth, borderRadius: RADIUS.lg, padding: compact ? SPACE.sm : SPACE.md,
+      gap: SPACE.sm, alignItems: 'center' }}>
+      {state && active && <View style={{ width: '100%', maxWidth: boardSide, gap: SPACE.xs }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Body theme={theme} small>{state.mode === 'calm' ? `${state.matchedCount} circles`
             : `${Math.min(state.targetIndex + 1, state.targetCount)} of ${state.targetCount}`}</Body>
@@ -115,13 +120,18 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
           : 'Watch the circles light up…'}</Body>}
       </View>}
 
-      <View accessible accessibilityLabel={active ? 'Tap Quest play area. Touch the circles with your stylus.'
+      <View style={{ flex: 1, minHeight: 0, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' }}
+        onLayout={event => {
+          const { width: w, height: h } = event.nativeEvent.layout;
+          setBoardSide(Math.floor(Math.min(w, h)));
+        }}>
+      {boardSide > 0 && <View accessible accessibilityLabel={active ? 'Tap Quest play area. Touch the circles with your stylus.'
         : 'Tap Quest play area'}
         onLayout={event => setLayout(event.nativeEvent.layout)}
         onStartShouldSetResponder={() => status === 'running'} onMoveShouldSetResponder={() => status === 'running'}
         onResponderGrant={event => touch(event, 'down')} onResponderMove={event => touch(event, 'move')}
-        onResponderRelease={event => touch(event, 'up')}
-        style={{ width: '100%', maxWidth: TAP_QUEST_VIEW.boardMaxWidth, aspectRatio: 1,
+        onResponderRelease={event => touch(event, 'up')} onResponderTerminationRequest={() => false}
+        style={{ width: boardSide, height: boardSide,
           borderRadius: RADIUS.lg, backgroundColor: theme.raised,
           opacity: status === 'paused' ? .5 : 1, overflow: 'hidden' }}>
         <Svg width={size} height={layout.height} pointerEvents="none">
@@ -144,6 +154,7 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
           <Text style={{ fontFamily: FONTS.body, fontSize: TYPE.body, color: theme.secondary, textAlign: 'center' }}>
             {status === 'finished' ? 'Great tapping!' : 'Pick a mode, then Start'}</Text>
         </View>}
+      </View>}
       </View>
 
       <View style={{ flexDirection: 'row', gap: SPACE.md, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -163,6 +174,5 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
       </View>
       {patternMessage && <View accessibilityLiveRegion="polite"><Body theme={theme} small>{patternMessage}</Body></View>}
     </View>
-    <Body theme={theme} small>Take breaks whenever you like. Leaving this screen pauses the game.</Body>
   </View>;
 }

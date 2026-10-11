@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Text, View } from 'react-native';
+import { Animated, Easing, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { type Celebration, useCelebration } from '@jimmyit/app-kit';
 import type { Theme } from '../theme';
 import { ANIMATIONS, USE_NATIVE_DRIVER, useAnimation } from '../design/motion';
-import { FONTS, RADIUS, SPACE, TYPE } from '../design/tokens';
+import { FONTS, RADIUS, SIZE, SPACE, TYPE } from '../design/tokens';
 
 const SPARKLE_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
@@ -12,11 +12,12 @@ function chipWords(celebration: Celebration): string {
 }
 
 /**
- * The running score at the top of a game. Score moments (every 100 points, a new best) celebrate here, in place,
- * so play is never interrupted: the number pops, sparks fly off it, and a chip says what happened.
+ * The running score at the top of a game. Score moments (milestones at 100, 500, 1000, 1500, 2000, 3000 and every
+ * 1000 after; a new best) celebrate here, in place, so play is never interrupted: the number pops, sparks fly off
+ * it, and a chip says what happened.
  */
-export function GameScoreBar({ theme, score, label = 'Score' }: {
-  readonly theme: Theme; readonly score: number; readonly label?: string;
+export function GameScoreBar({ theme, score, label = 'Score', style }: {
+  readonly theme: Theme; readonly score: number; readonly label?: string; readonly style?: StyleProp<ViewStyle>;
 }) {
   const live = useCelebration();
   // The toy's own games celebrate in CelebrationToast; game ends in the app get the points dialog.
@@ -50,10 +51,10 @@ export function GameScoreBar({ theme, score, label = 'Score' }: {
 
   const accent = big ? theme.gold : theme.accentText;
   const sparkColors = [theme.yellow, theme.coral, theme.mint, theme.purple];
-  return <View accessibilityRole="summary" style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
-    gap: SPACE.md, alignSelf: 'stretch', minHeight: 64, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm,
-    marginBottom: SPACE.lg, borderRadius: RADIUS.lg, backgroundColor: theme.surface,
-    borderWidth: 2, borderColor: celebration ? accent : theme.border }}>
+  return <View accessibilityRole="summary" style={[{ flexDirection: 'row', alignItems: 'center',
+    gap: SPACE.md, minHeight: SIZE.touchTarget, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.lg, backgroundColor: theme.surface,
+    borderWidth: 2, borderColor: celebration ? accent : theme.border }, style]}>
     <Text style={{ fontFamily: FONTS.bodyBold, fontSize: TYPE.caption, letterSpacing: 2, color: theme.secondary }}>
       {label.toUpperCase()}
     </Text>

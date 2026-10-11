@@ -203,9 +203,10 @@ export function DevToyPanel({ simulator, defaultOpen = false }: DevToyPanelProps
 
   const lastHaptics = toy.haptics.slice(-3).reverse();
   // A whole Free Play game on the toy: live score events if the app is connected, then the record.
+  // About a move a second; the real toy ends 3 s after the last move (2 s, then a 1 s bar that runs down).
   const playOnToy = () => {
     const moves = 3 + Math.floor(Math.random() * 18);
-    toy.playStandaloneGame({ modeId: BasicModeId.freePlay, moves, durationS: 20 + moves * 2 });
+    toy.playStandaloneGame({ modeId: BasicModeId.freePlay, moves, durationS: moves + 3 });
   };
 
   return (
@@ -241,6 +242,9 @@ export function DevToyPanel({ simulator, defaultOpen = false }: DevToyPanelProps
           <Key label="Spin 1 turn" onPress={() => toy.spin(360)} />
           <Key label="Loosen" onPress={() => toy.turnScrew(-1)} />
           <Key label="Tighten" onPress={() => toy.turnScrew(1)} />
+          {/* One screw move is a quarter turn: 6 of the encoder's 24 detents. */}
+          <Key label="Tighten ¼ turn" onPress={() => toy.turnScrew(6)} />
+          <HoldKey toy={toy} switchId="screwPush" label="Push screw" />
         </Section>
         <Section title="Toy on its own">
           <Key label="Toy plays Free Play" onPress={playOnToy} wide />

@@ -18,6 +18,7 @@ import type { CatalogEntry } from './catalog';
 import type { ConnectionManager, ConnectionSnapshot } from './connection';
 import { getProgress, type Progress } from './progress';
 import { getScoreboard, type Scoreboard } from './scoreboard';
+import type { Reward } from './rewards';
 import type { JimmyServices } from './services';
 
 const ServicesContext = createContext<JimmyServices | null>(null);
@@ -99,6 +100,38 @@ export function useCelebration(options: { readonly durationMs?: number } = {}): 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
+  return current;
+}
+
+// ---- Rewards ------------------------------------------------------------------
+
+/**
+ * The level-up or new badge to show right now, or null. Rewards earned together (a level and a badge from one game)
+ * take turns, each for `durationMs`.
+ */
+export function useReward(options: { readonly durationMs?: number } = {}): Reward | null {
+  const durationMs = options.durationMs ?? 3500;
+  const services = useJimmyServices();
+  const [current, setCurrent] = useState<Reward | null>(null);
+  const queue = useRef<Reward[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const showNext = () => {
+      const next = queue.current.shift() ?? null;
+      setCurrent(next);
+      timer.current = next ? setTimeout(showNext, durationMs) : null;
+    };
+    const stop = services.onReward((reward) => {
+      queue.current.push(reward);
+      if (!timer.current) showNext();
+    });
+    return () => {
+      stop();
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      queue.current = [];
+    };
+  }, [services, durationMs]);
   return current;
 }
 

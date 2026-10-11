@@ -7,22 +7,23 @@ describe('timed-motor-practice', () => {
     const h = await createGameTestHarness(createTimedPractice(30_000));
     h.fidget.tap('clicker');
     h.fidget.spin(180); // two 90° spins
-    h.fidget.turnScrew(-3);
+    h.fidget.turnScrew(-3); // half a quarter turn: not a move yet
+    h.fidget.turnScrew(-9); // 12 detents in all: two quarter turns
     h.fidget.press('sliderHigh');
     h.fidget.press('rocker');
     h.fidget.release('stylusStowed'); // stylus taken out of its bay
     h.fidget.press('stylusStowed'); // put back: not a move
-    expect(h.run.getState()).toMatchObject({ totalMoves: 9, lastMove: 'stylus', score: 45 });
+    expect(h.run.getState()).toMatchObject({ totalMoves: 8, lastMove: 'stylus', score: 40 });
 
     const record = await h.playToEnd();
     expect(record).toMatchObject({
       gameId: 'timed-motor-practice',
-      score: 45,
-      actions: 9,
+      score: 40,
+      actions: 8,
       stars: 1,
       completed: true,
       durationMs: 30_000,
-      metrics: { buttonPressCount: 1, spinCount: 2, screwTurnCount: 3, slideCount: 1, rockerToggleCount: 1, stylusCount: 1 },
+      metrics: { buttonPressCount: 1, spinCount: 2, screwTurnCount: 2, slideCount: 1, rockerToggleCount: 1, stylusCount: 1 },
     });
   });
 

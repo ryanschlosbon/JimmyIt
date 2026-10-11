@@ -14,6 +14,7 @@ import {
 } from '@jimmyit/core';
 import { type GameDefinition, type GameRun, startGame } from '@jimmyit/game-sdk';
 import { type AppIdentity, type ConnectionManager, createConnectionManager, type ToyConnector } from './connection';
+import { createRewardWatcher, type Reward } from './rewards';
 
 export const APP_ID_STORAGE_KEY = 'jimmyit.appId';
 
@@ -37,6 +38,12 @@ export interface JimmyServices {
    * running by itself while connected (source 'toy'). Drive celebrations from this.
    */
   onScoreEvent(listener: Listener<ScoreEvent>): Unsubscribe;
+  /**
+   * A level-up or a new badge, from any record saved after startup (app games,
+   * and toy games synced or finished live). The connected toy already plays the
+   * `levelUp` or `badge` haptic (level-up wins if both); use this for the screen.
+   */
+  onReward(listener: Listener<Reward>): Unsubscribe;
 }
 
 export interface JimmyServicesOptions {
@@ -79,6 +86,12 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
     onToyScoreEvent: (event) => scoreEvents.emit(event),
   });
 
+  // One haptic per save or sync, however many rewards it brought.
+  const rewards = createRewardWatcher(repository, (found) => {
+    const feedback = found.some((reward) => reward.type === 'levelUp') ? 'levelUp' : 'badge';
+    connection.getClient()?.feedback(feedback).catch(options.onDeviceError ?? (() => undefined));
+  });
+
   const canPlay: JimmyServices['canPlay'] = (game) => game.needsToy === false || connection.getClient() !== null;
 
   return {
@@ -86,6 +99,7 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
     connection,
     canPlay,
     onScoreEvent: (listener) => scoreEvents.subscribe(listener),
+    onReward: (listener) => rewards.onReward(listener),
     play(game, playOptions = {}) {
       if (!canPlay(game)) throw new ToyNotConnectedError(game.id);
       return startGame(game, {
