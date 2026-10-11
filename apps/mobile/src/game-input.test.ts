@@ -3,21 +3,22 @@ import { dispatchGameInput } from './game-input';
 import { keyboardButtonEvent } from './game-keyboard.web';
 
 describe('game input bridge', () => {
-  it('maps A, S, D, F to the four demo lanes', () => {
+  it('maps A, S, D, F to click, left, right and spin', () => {
     expect(['a', 's', 'd', 'f'].map(key => keyboardButtonEvent(key))).toEqual(
-      [0, 1, 2, 3].map(lane => ({ type: 'button', source: 'keyboard', lane, pressed: true })));
+      (['click', 'left', 'right', 'spin'] as const).map(move => ({ type: 'button', source: 'keyboard', move, pressed: true })));
+    expect(keyboardButtonEvent('F', false)).toEqual({ type: 'button', source: 'keyboard', move: 'spin', pressed: false });
     expect(keyboardButtonEvent('x')).toBeNull();
   });
   it('sends keyboard, touch, and hardware events through identical game actions', () => {
     const buttons: unknown[] = [];
     const axes: unknown[] = [];
     for (const source of ['keyboard', 'touch', 'hardware'] as const) {
-      dispatchGameInput({ type: 'button', source, lane: 2, pressed: true }, action => buttons.push(action),
+      dispatchGameInput({ type: 'button', source, move: 'right', pressed: true }, action => buttons.push(action),
         action => axes.push(action));
       dispatchGameInput({ type: 'axis', source, axis: 'vertical', value: -0.5 }, action => buttons.push(action),
         action => axes.push(action));
     }
-    expect(buttons).toEqual(Array(3).fill({ type: 'button', lane: 2, pressed: true }));
+    expect(buttons).toEqual(Array(3).fill({ type: 'button', move: 'right', pressed: true }));
     expect(axes).toEqual(Array(3).fill({ type: 'axis', axis: 'vertical', value: -0.5 }));
   });
 });

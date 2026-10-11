@@ -1,14 +1,15 @@
+import type { ButtonHeroMove } from '@jimmyit/game-button-hero';
 import type { GameInputEvent } from './game-input';
 
-const LANES: Readonly<Record<string, number>> = { a: 0, s: 1, d: 2, f: 3 };
+const MOVES: Readonly<Record<string, ButtonHeroMove>> = { a: 'click', s: 'left', d: 'right', f: 'spin' };
 const ARROWS: Readonly<Record<string, { readonly axis: 'horizontal' | 'vertical'; readonly value: number }>> = {
   ArrowLeft: { axis: 'horizontal', value: -1 }, ArrowRight: { axis: 'horizontal', value: 1 },
   ArrowUp: { axis: 'vertical', value: -1 }, ArrowDown: { axis: 'vertical', value: 1 },
 };
 
-export function keyboardButtonEvent(key: string): GameInputEvent | null {
-  const lane = LANES[key.toLowerCase()];
-  return lane === undefined ? null : { type: 'button', source: 'keyboard', lane, pressed: true };
+export function keyboardButtonEvent(key: string, pressed = true): GameInputEvent | null {
+  const move = MOVES[key.toLowerCase()];
+  return move === undefined ? null : { type: 'button', source: 'keyboard', move, pressed };
 }
 
 /** The two callbacks consume the same actions sent by touch controls. */
@@ -36,6 +37,8 @@ export function attachGameKeyboard(game: 'buttonHero' | 'knobQuest',
   };
   const keyUp = (event: KeyboardEvent) => {
     const key = event.key.toLowerCase();
+    const release = keyboardButtonEvent(key, false);
+    if (game === 'buttonHero' && release && held.has(key)) onInput(release);
     held.delete(key);
     if (game === 'knobQuest' && ARROWS[event.key]) {
       event.preventDefault();
