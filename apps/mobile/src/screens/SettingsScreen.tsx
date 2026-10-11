@@ -97,7 +97,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
       <SettingsBackdrop theme={theme} phone={phone} />
       <View style={{ minHeight: phone ? SETTINGS.heroPhoneHeight : SETTINGS.heroHeight,
         justifyContent: 'center', gap: SPACE.md, paddingRight: phone ? 0 : SETTINGS.heroArtSize + SPACE.xl }}>
-        <Tappable accessibilityLabel="Grown-ups, more settings" accessibilityState={{ expanded: showMore }}
+        <Tappable accessibilityLabel="Grown-ups" accessibilityState={{ expanded: showMore }}
           accessibilityHint="Shows extra setup options below the main settings cards."
           focusColor={theme.focus} onPress={() => setShowMore(!showMore)}
           style={{ position: phone ? 'relative' : 'absolute', top: 0, right: 0,
@@ -177,10 +177,6 @@ export function SettingsScreen({ theme, state, replayIntro }: {
           <SettingsToggle theme={theme} label="Dark mode" text={state.dark ? 'Dark mode is on' : 'Dark mode is off'}
             value={state.dark} onChange={state.setDark} />
         </SettingsCard>
-      </View>
-      <View style={{ alignItems: 'flex-start', paddingTop: SPACE.md }}>
-        <Button theme={theme} label={showMore ? 'Hide more settings' : 'More settings'} icon="gear"
-          onPress={() => setShowMore(!showMore)} />
       </View>
     </View>
     {showMore && <View style={{ gap: SPACE.xl }}>
