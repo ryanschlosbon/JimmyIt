@@ -10,6 +10,10 @@ import { createTimedPractice, TIMED_PRACTICE_DURATIONS_MS } from '@jimmyit/game-
 export type Activity = 'drawing' | 'shapes';
 
 export const DRAWING_GAMES = { drawing: freeDrawing, shapes: shapeChallenge } as const;
+/** The canvas guides four shapes; its strokes feed this headless recognition game. */
+export const SHAPE_CHALLENGE_GAME = createShapeRecognitionGame({
+  targets: ['circle', 'triangle', 'square', 'rectangle'],
+});
 
 export const TIMED_PRACTICE_SECONDS = TIMED_PRACTICE_DURATIONS_MS.map((ms) => ms / 1000);
 const timedPractice = new Map<number, ReturnType<typeof createTimedPractice>>(

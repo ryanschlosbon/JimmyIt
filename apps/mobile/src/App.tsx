@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -10,12 +10,14 @@ import { createJimmyServices, JimmyServicesProvider, ToyNotConnectedError, useGa
 import { drawingReducer, type DrawingAction, type DrawingGameAction, type DrawingGameState, type Stroke } from '@jimmyit/game-drawing';
 import type { TimedPracticeState } from '@jimmyit/game-timed-practice';
 import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
+import type { ShapeRecognitionAction, ShapeRecognitionState } from '@jimmyit/game-shape-recognition';
 import type { ScoreRecord } from '@jimmyit/core';
 import type { SaveStatus } from '@jimmyit/game-sdk';
 import { defaultAccessibilityPreferences } from '@jimmyit/ai';
 import { getTheme } from './theme';
 import { useJimmy } from './use-jimmy';
-import { DRAWING_GAMES, tapQuestGame, timedPracticeGame, type Activity } from './games';
+import { DRAWING_GAMES, SHAPE_CHALLENGE_GAME, tapQuestGame, timedPracticeGame, type Activity } from './games';
+import { createSessionShapeRecognizer } from './shape-recognition-service';
 import { createToySetup, loadDevToyPanel } from './toy-connector';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { HomeScreen } from './screens/HomeScreen';
@@ -69,6 +71,7 @@ export function App() {
 
 function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const state = useJimmy();
+  const shapeRecognizer = useMemo(() => createSessionShapeRecognizer(state.shapeSessionToken), [state.shapeSessionToken]);
   const theme = getTheme(state.dark);
   const [fontsLoaded, fontError] = useFonts({ Baloo: Baloo2_700Bold, Poppins: Poppins_400Regular,
     PoppinsBold: Poppins_600SemiBold });
@@ -80,8 +83,11 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const tapQuest = useGameRun<TapQuestState, TapQuestAction>();
   const drawingRuns = {
     drawing: useGameRun<DrawingGameState, DrawingGameAction>(),
-    shapes: useGameRun<DrawingGameState, DrawingGameAction>(),
+    shapes: useGameRun<ShapeRecognitionState, ShapeRecognitionAction>(),
   };
+  const [recognizingShape, setRecognizingShape] = useState(false);
+  const shapeInFlight = useRef(false);
+  const shapeSubmissionId = useRef(0);
   const [activity, setActivity] = useState<Activity>('drawing');
   const [drafts, setDrafts] = useState<Record<Activity, readonly Stroke[]>>({ drawing: NO_STROKES, shapes: NO_STROKES });
   const [reward, setReward] = useState<number | null>(null);
@@ -115,18 +121,47 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   };
   const start = (next: Activity) => { setActivity(next); navigate('draw'); };
   const dispatch = (action: DrawingAction) => {
-    const run = drawingRuns[activity];
     // The game's clock starts with the first mark, as the drawing's time always has.
-    if (action.type === 'begin' && run.status !== 'running') run.start(DRAWING_GAMES[activity], { tickMs: DRAWING_TICK_MS });
+    if (action.type === 'begin' && activity === 'drawing' && drawingRuns.drawing.status !== 'running') {
+      drawingRuns.drawing.start(DRAWING_GAMES.drawing, { tickMs: DRAWING_TICK_MS });
+    }
+    if (action.type === 'begin' && activity === 'shapes' && drawingRuns.shapes.status !== 'running') {
+      drawingRuns.shapes.start(SHAPE_CHALLENGE_GAME, { tickMs: DRAWING_TICK_MS });
+    }
     setDrafts(current => ({ ...current, [activity]: drawingReducer(current[activity], action) }));
   };
 
+  const finishShape = async () => {
+    const current = drawingRuns.shapes;
+    if (shapeInFlight.current || current.saveStatus === 'saving') return;
+    if (current.status === 'finished' && current.saveStatus === 'failed') { current.retrySave(); return; }
+    const run = current.status === 'running' && current.run ? current.run
+      : current.start(SHAPE_CHALLENGE_GAME, { tickMs: DRAWING_TICK_MS });
+    const target = run.getState().target;
+    if (!target) return;
+    shapeInFlight.current = true;
+    setRecognizingShape(true);
+    try {
+      const drawing = { width: 1000, height: 650, strokes: drafts.shapes.map(stroke => stroke.points) };
+      const prediction = await shapeRecognizer.predict(drawing, target);
+      if (__DEV__) console.info('Shape recognition', { provider: prediction.provider, modelId: prediction.modelId,
+        shape: prediction.shape, modelScore: prediction.modelScore, inferenceTimeMs: prediction.inferenceTimeMs });
+      shapeSubmissionId.current++;
+      run.submit({ type: 'submitDrawing', submissionId: String(shapeSubmissionId.current), drawing, prediction });
+      if (run.getState().target !== target) setDrafts(current => ({ ...current, shapes: NO_STROKES }));
+    } finally { shapeInFlight.current = false; setRecognizingShape(false); }
+  };
+
   const finish = () => {
-    const current = drawingRuns[activity];
+    if (activity === 'shapes') {
+      finishShape().catch(() => state.setError('Your drawing is still here. Please try All done again.'));
+      return;
+    }
+    const current = drawingRuns.drawing;
     if (current.saveStatus === 'saving') return;
     if (current.status === 'finished' && current.saveStatus === 'failed') { current.retrySave(); return; }
     const run = current.status === 'running' && current.run ? current.run
-      : current.start(DRAWING_GAMES[activity], { tickMs: DRAWING_TICK_MS });
+      : current.start(DRAWING_GAMES.drawing, { tickMs: DRAWING_TICK_MS });
     run.submit({ type: 'finish', strokeCount: drafts[activity].length });
   };
 
@@ -176,6 +211,9 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     { screen: 'home', label: 'Home', icon: 'home' }, { screen: 'draw', label: 'Draw', icon: 'pencil' },
     { screen: 'rewards', label: 'Rewards', icon: 'star' },
   ];
+  const shapeState = drawingRuns.shapes.state;
+  const shapeFeedback = shapeState?.lastResult?.target === shapeState?.target
+    ? shapeState?.lastResult?.feedback : undefined;
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.page }}>
     <StatusBar barStyle={state.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.page} />
     <View role="banner" style={{ borderBottomWidth: 1, borderColor: theme.border, backgroundColor: theme.page }}>
@@ -211,7 +249,12 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
         {screen === 'home' && <HomeScreen theme={theme} start={start} rewards={() => navigate('rewards')}
           timed={() => navigate('timed')} tapQuest={() => navigate('tapQuest')} />}
         {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
-          dispatch={dispatch} finish={finish} saving={drawingRuns[activity].saveStatus === 'saving'} />}
+          dispatch={dispatch} finish={finish} saving={(activity === 'shapes' && recognizingShape)
+            || drawingRuns[activity].saveStatus === 'saving'}
+          shapeTarget={activity === 'shapes' ? shapeState?.target ?? 'circle' : undefined}
+          shapeIndex={shapeState?.challengeIndex ?? 0}
+          shapeCount={shapeState?.challengeCount ?? 4}
+          shapeFeedback={activity === 'shapes' ? shapeFeedback : undefined} />}
         {screen === 'rewards' && <RewardsScreen theme={theme} progress={state.progress} />}
         {screen === 'settings' && <SettingsScreen theme={theme} state={state}
           replayIntro={() => { navigate('home'); setIntroDone(false); }} />}
