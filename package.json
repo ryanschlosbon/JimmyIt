@@ -15,7 +15,7 @@
     "test:firmware": "make -C firmware/test",
     "typecheck": "tsc -p tsconfig.json",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "check": "npm run typecheck && npm run typecheck -w @jimmyit/ai-service && npm run typecheck -w @jimmyit/mobile && npm run check:boundaries && npm test && npm test -w @jimmyit/mobile"
+    "check": "npm run typecheck && npm run typecheck -w @jimmyit/ai-service && npm run typecheck -w @jimmyit/mobile && npm run typecheck -w @jimmyit/web && npm run check:boundaries && npm test && npm test -w @jimmyit/mobile && npm test -w @jimmyit/web"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

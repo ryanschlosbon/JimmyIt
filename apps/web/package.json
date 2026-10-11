@@ -1,0 +1,35 @@
+{
+  "name": "@jimmyit/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@jimmyit/app-kit": "*",
+    "@jimmyit/core": "*",
+    "@jimmyit/fake-fidget": "*",
+    "@jimmyit/game-button-hero": "*",
+    "@jimmyit/game-drawing": "*",
+    "@jimmyit/game-knob-quest": "*",
+    "@jimmyit/game-shape-recognition": "*",
+    "@jimmyit/game-tap-quest": "*",
+    "@jimmyit/game-timed-practice": "*",
+    "@jimmyit/protocol": "*",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native-web": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "@types/react-dom": "19.2.7",
+    "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
