@@ -35,7 +35,7 @@ import { Icon } from './components/Icon';
 import { AppHeader, type HeaderTab } from './components/AppHeader';
 import { Bubbles } from './components/Bubbles';
 import type { BannerStat } from './components/GameBanner';
-import { FONTS, RADIUS } from './design/tokens';
+import { ART, FONTS, RADIUS, SETTINGS, SPACE } from './design/tokens';
 import { Jimmy } from './components/Jimmy';
 import { setupWebAccessibility } from './web-accessibility';
 
@@ -95,6 +95,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const [recognizingShape, setRecognizingShape] = useState(false);
   const shapeInFlight = useRef(false);
   const shapeSubmissionId = useRef(0);
+  const canvasSize = useRef<{ readonly width: number; readonly height: number }>({ width: 1000, height: 650 });
   const [activity, setActivity] = useState<Activity>('drawing');
   const [drafts, setDrafts] = useState<Record<Activity, readonly Stroke[]>>({ drawing: NO_STROKES, shapes: NO_STROKES });
   const [reward, setReward] = useState<number | null>(null);
@@ -116,7 +117,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const tapQuestMode = (choices.tapQuest ?? 'precision') as TapQuestMode;
   const choose = (game: ShelfGameId, value: string) => setChoices(current => ({ ...current, [game]: value }));
 
-  const drawingSaveFailed = () => state.setError('Your drawing is still here. We couldn’t save your points yet — please try All done again.');
+  const drawingSaveFailed = () => state.setError('Your drawing is still here. We couldn’t save your points yet — please try Submit again.');
   useRunOutcome(timed, record => { setRewardFrom('timed'); setRewardNewBest(record.newBest); setReward(record.score); },
     () => state.setError('Your little moves are still here. Please use Retry saving to save your points.'));
   useRunOutcome(tapQuest, record => { setRewardFrom('tapQuest'); setRewardNewBest(record.newBest); setReward(record.score); },
@@ -160,7 +161,11 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     shapeInFlight.current = true;
     setRecognizingShape(true);
     try {
-      const drawing = { width: 1000, height: 650, strokes: drafts.shapes.map(stroke => stroke.points) };
+      // Strokes are stored in a fixed 1000×650 space that the canvas stretches to fit the screen; restore the
+      // on-screen proportions so a square the child traced isn't judged as a rectangle.
+      const { width, height } = canvasSize.current;
+      const drawing = { width, height, strokes: drafts.shapes.map(stroke =>
+        stroke.points.map(point => ({ x: point.x * width / 1000, y: point.y * height / 650 }))) };
       const prediction = await shapeRecognizer.predict(drawing, target);
       if (__DEV__) console.info('Shape recognition', { provider: prediction.provider, modelId: prediction.modelId,
         shape: prediction.shape, modelScore: prediction.modelScore, inferenceTimeMs: prediction.inferenceTimeMs });
@@ -264,16 +269,21 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
       <PlayScreen theme={theme} games={PLAY_SHELF} stats={stats} choices={choices} onChoose={choose} onPlay={play}
         index={shelfIndex} onIndex={setShelfIndex} toyConnected={state.connection === 'connected'} />
     </View> : <ScrollView ref={scroll} role="main" keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ flexGrow: 1, paddingHorizontal: compact ? 10 : 30, paddingTop: compact ? 12 : 22,
-        paddingBottom: 30 }}>
-      <View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', backgroundColor: theme.sheet,
-        borderRadius: RADIUS.xl, padding: compact ? 14 : 30 }}>
+      contentContainerStyle={{ flexGrow: 1, paddingHorizontal: screen === 'draw' ? SPACE.sm : compact ? 10 : 30,
+        paddingTop: screen === 'draw' ? SPACE.sm : compact ? 12 : 22,
+        paddingBottom: screen === 'draw' ? SPACE.sm : 30 }}>
+      <View style={{ width: '100%', maxWidth: screen === 'draw' ? ART.maxWidth
+        : screen === 'settings' ? SETTINGS.maxWidth : 1200, alignSelf: 'center',
+        backgroundColor: screen === 'draw' || screen === 'settings' ? undefined : theme.sheet,
+        borderRadius: RADIUS.xl, padding: screen === 'draw' ? SPACE.xs : screen === 'settings' ? 0 : compact ? 14 : 30 }}>
         {errorBanner}
-        {(isActivity(screen) || screen === 'draw') && <Button theme={theme} label="All games" icon="chevronLeft" compact
+        {isActivity(screen) && <Button theme={theme} label="All games" icon="chevronLeft" compact
           onPress={() => navigate('home')} style={{ alignSelf: 'flex-start', marginBottom: 18 }} />}
         {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
           dispatch={dispatch} finish={finish} saving={(activity === 'shapes' && recognizingShape)
             || drawingRuns[activity].saveStatus === 'saving'}
+          onAllGames={() => navigate('home')}
+          onCanvasSize={size => { canvasSize.current = size; }}
           shapeTarget={activity === 'shapes' ? shapeState?.target ?? 'circle' : undefined}
           shapeIndex={shapeState?.challengeIndex ?? 0}
           shapeCount={shapeState?.challengeCount ?? 4}

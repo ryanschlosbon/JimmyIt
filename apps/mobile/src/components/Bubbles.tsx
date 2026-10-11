@@ -23,7 +23,8 @@ interface BubbleSpec {
   readonly x: number;
   readonly color: string;
   readonly speed: number;
-  readonly swayPhase: number;
+  readonly startY: number;
+  readonly swayMs: number;
 }
 
 const random = (min: number, max: number) => min + Math.random() * (max - min);
@@ -38,16 +39,19 @@ function randomX(width: number): number {
 
 let nextBubbleId = 0;
 /** `turn` walks each bubble through the colors so the screen always has an even mix. */
-function randomBubble(width: number, height: number, colors: readonly string[], turn: number): BubbleSpec {
+function randomBubble(width: number, height: number, colors: readonly string[], turn: number,
+  initial = false): BubbleSpec {
   const settings = ANIMATIONS.bubblesFloat;
   const longSide = Math.max(width, height);
+  const size = random(settings.minSize, settings.maxSize) * longSide;
   return {
     id: nextBubbleId++,
-    size: random(settings.minSize, settings.maxSize) * longSide,
+    size,
     x: randomX(width),
-    color: colors[turn % Math.max(colors.length, 1)] ?? '#EF6B62',
+    color: colors[turn % Math.max(colors.length, 1)] ?? '',
     speed: random(settings.minSpeed, settings.maxSpeed),
-    swayPhase: Math.random(),
+    startY: initial ? random(-size / 2, height + size / 2) : height + size / 2,
+    swayMs: random(settings.swayMs * 0.8, settings.swayMs * 1.2),
   };
 }
 
@@ -55,40 +59,48 @@ function FloatingBubble({ index, width, height, colors, opacity }: {
   readonly index: number; readonly width: number; readonly height: number;
   readonly colors: readonly string[]; readonly opacity: number;
 }) {
-  const settings = ANIMATIONS.bubblesFloat;
   const turn = useRef(index);
-  const [spec, setSpec] = useState(() => randomBubble(width, height, colors, turn.current));
-  // The first bubbles start spread over the screen; replacements start just below it.
-  const firstRun = useRef(true);
-  const rise = useRef(new Animated.Value(0)).current;
-  const sway = useRef(new Animated.Value(spec.swayPhase)).current;
+  const [spec, setSpec] = useState(() => randomBubble(width, height, colors, turn.current, true));
+  const replace = () => {
+    turn.current += 1;
+    setSpec(randomBubble(width, height, colors, turn.current));
+  };
+
+  // A replacement gets its own values below the screen in the same render as its new size/color.
+  return <BubbleMotion key={spec.id} spec={spec} index={index} opacity={opacity} onExit={replace} />;
+}
+
+function BubbleMotion({ spec, index, opacity, onExit }: {
+  readonly spec: BubbleSpec; readonly index: number; readonly opacity: number; readonly onExit: () => void;
+}) {
+  const settings = ANIMATIONS.bubblesFloat;
+  const rise = useRef(new Animated.Value(spec.startY)).current;
+  const sway = useRef(new Animated.Value(0)).current;
+  const exit = useRef(onExit);
+  exit.current = onExit;
 
   useEffect(() => {
-    const start = height + spec.size / 2;
     const end = -spec.size / 2;
-    const from = firstRun.current ? random(end, start) : start;
-    firstRun.current = false;
-    rise.setValue(from);
-    const animation = Animated.timing(rise, { toValue: end, duration: ((from - end) / spec.speed) * 1000,
-      easing: Easing.linear, useNativeDriver: USE_NATIVE_DRIVER });
+    let active = true;
+    const animation = Animated.timing(rise, { toValue: end,
+      duration: ((spec.startY - end) / spec.speed) * 1000,
+      easing: Easing.linear, useNativeDriver: USE_NATIVE_DRIVER, isInteraction: false });
     animation.start(({ finished }) => {
-      if (!finished) return;
-      turn.current += 1;
-      setSpec(randomBubble(width, height, colors, turn.current));
+      if (active && finished) exit.current();
     });
-    return () => animation.stop();
-  }, [spec, width, height, colors, rise]);
+    return () => { active = false; animation.stop(); };
+  }, [spec, rise]);
 
   useEffect(() => {
     const loop = Animated.loop(Animated.sequence([
-      Animated.timing(sway, { toValue: 1, duration: settings.swayMs / 2, easing: Easing.inOut(Easing.sin),
-        useNativeDriver: USE_NATIVE_DRIVER }),
-      Animated.timing(sway, { toValue: 0, duration: settings.swayMs / 2, easing: Easing.inOut(Easing.sin),
-        useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(sway, { toValue: 1, duration: spec.swayMs / 2, easing: Easing.inOut(Easing.sin),
+        useNativeDriver: USE_NATIVE_DRIVER, isInteraction: false }),
+      Animated.timing(sway, { toValue: 0, duration: spec.swayMs / 2, easing: Easing.inOut(Easing.sin),
+        useNativeDriver: USE_NATIVE_DRIVER, isInteraction: false }),
     ]));
     loop.start();
     return () => loop.stop();
-  }, [sway, settings.swayMs]);
+  }, [sway, spec.swayMs]);
 
   const swayPx = settings.swayPx * (index % 2 === 0 ? 1 : -1);
   return <Animated.View style={[styles.bubble, {

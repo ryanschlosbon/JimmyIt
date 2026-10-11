@@ -50,3 +50,44 @@ export const TYPE = {
   small: 16,
   caption: 14,
 } as const;
+
+/** Art fills the available screen; short windows use an extra tool column. */
+export const ART = {
+  canvasMinHeight: 320, phoneCanvasHeight: 360, titleHeight: 56,
+  viewportChromeHeight: 128,
+  actionHeight: 56, actionIcon: 28, faceSize: 40,
+  swatchRadius: 10,
+  borderWidth: 2, selectedBorderWidth: 3, titleFont: 36,
+  maxWidth: 1600,
+} as const;
+
+/** Presets, in drawing-coordinate units, from a fine point to a broad brush. */
+export const ART_BRUSH_SIZES = [4, 8, 12, 18, 24, 30, 40, 48] as const;
+
+/** Compact inner-game versions of the supplied title banners. */
+export const ACTIVITY_HEADER = {
+  minHeight: 184, phoneMinHeight: 148, faceSize: 104, phoneFaceSize: 64,
+  bubbleSize: 160, smallBubbleSize: 112, shadowHeight: 8,
+} as const;
+
+export const TAP_QUEST_VIEW = {
+  boardMaxWidth: 560, borderWidth: 2, targetBorderWidth: 3, pathDotSize: 6,
+} as const;
+
+/** The supplied Rewards banner keeps its full proportions on tablets. */
+export const REWARDS = {
+  bannerAspectRatio: 2360 / 553, phoneBannerHeight: 232, phoneFaceSize: 56,
+} as const;
+
+/** Settings proportions follow the grown-ups' area reference. */
+export const SETTINGS = {
+  maxWidth: 1440, columnBreakpoint: 850,
+  heroHeight: 160, heroPhoneHeight: 148, heroArtSize: 180,
+  grownUpsWidth: 224, grownUpsPhoneWidth: 200, grownUpsAspectRatio: 388 / 108,
+  heroBubbleSize: 240, smallBubbleSize: 112, bottomBubbleSize: 260,
+  faceSize: 120, phoneFaceSize: 72,
+  cardArtHeight: 144, cardBodyHeight: 184, cardIconSize: 80,
+  controlMinWidth: 240,
+  borderWidth: 2, frameBorderWidth: 3, shadowOffset: 8,
+  switchWidth: 56, switchHeight: 34, switchThumbSize: 26,
+} as const;

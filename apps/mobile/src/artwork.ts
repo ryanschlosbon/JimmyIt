@@ -7,6 +7,9 @@ export const APP_ARTWORK: Readonly<{
   introEnd: ImageSourcePropType;
   jimmyFace: ImageSourcePropType | null;
   jimmyHero: ImageSourcePropType | null;
+  settingsGrownUps: ImageSourcePropType;
+  settingsJimmy: ImageSourcePropType;
+  rewardsBanner: ImageSourcePropType;
   /** Pictures for the play-screen banners; null uses the built-in drawing (components/GameArt.tsx). */
   bannerArt: Readonly<Record<ShelfGameId, ImageSourcePropType | null>>;
 }> = {
@@ -14,6 +17,9 @@ export const APP_ARTWORK: Readonly<{
   introEnd: require('../assets/intro-end.png'),
   jimmyFace: null,
   jimmyHero: null,
+  settingsGrownUps: require('../assets/grown-ups.png'),
+  settingsJimmy: require('../assets/settings-jimmy.png'),
+  rewardsBanner: require('../assets/rewards-banner.png'),
   bannerArt: { timed: null, tapQuest: null, drawing: null, shapes: null },
 };
 

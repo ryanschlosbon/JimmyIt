@@ -7,6 +7,9 @@ import { AI_MODELS, DEFAULT_AI_SETTINGS, createConfiguredAIService, registerGemi
 import { GAME_CATALOG } from './games';
 import { registerShapeKey, removeShapeKey } from './shape-recognition-service';
 import { DEFAULT_COLOR_STYLE, isColorStyleId, type ColorStyleId } from './design/palettes';
+import { createJimmyNicknamePreference } from './jimmy-nickname';
+
+const nicknamePreference = createJimmyNicknamePreference(AsyncStorage);
 
 /** Where appearance choices are saved on the device. */
 const APPEARANCE_KEYS = { dark: 'jimmy.appearance', bubbles: 'jimmy.bubbles', colorStyle: 'jimmy.colorStyle' } as const;
@@ -33,6 +36,7 @@ export function useJimmy() {
   const [bubbles, setBubblesState] = useState(true);
   const [colorStyle, setColorStyleState] = useState<ColorStyleId>(DEFAULT_COLOR_STYLE);
   const [appearanceReady, setAppearanceReady] = useState(false);
+  const [nickname, setNickname] = useState<string | null>(null);
   const [aiSettings, setAISettingsState] = useState<AISettings>(DEFAULT_AI_SETTINGS);
   const [aiConnection, setAIConnection] = useState<'unchecked' | 'checking' | 'ready' | 'unavailable'>('unchecked');
   const [aiSessionToken, setAISessionToken] = useState<string | undefined>();
@@ -45,13 +49,15 @@ export function useJimmy() {
   useEffect(() => {
     let active = true;
     Promise.all([AsyncStorage.getItem(APPEARANCE_KEYS.dark), AsyncStorage.getItem(APPEARANCE_KEYS.bubbles),
-      AsyncStorage.getItem(APPEARANCE_KEYS.colorStyle)]).then(([darkValue, bubblesValue, styleValue]) => {
+      AsyncStorage.getItem(APPEARANCE_KEYS.colorStyle), nicknamePreference.load()])
+      .then(([darkValue, bubblesValue, styleValue, savedNickname]) => {
       if (!active) return;
       setDarkState(darkValue === 'dark');
       setBubblesState(bubblesValue !== 'off');
       if (isColorStyleId(styleValue)) setColorStyleState(styleValue);
+      setNickname(savedNickname);
     })
-      .catch(() => { if (active) setLocalError('Your appearance preference could not be opened.'); })
+      .catch(() => { if (active) setLocalError('Your saved preferences could not be opened.'); })
       .finally(() => { if (active) setAppearanceReady(true); });
     return () => { active = false; };
   }, []);
@@ -136,6 +142,8 @@ export function useJimmy() {
   const setDark = (next: boolean) => { setDarkState(next); saveAppearance(APPEARANCE_KEYS.dark, next ? 'dark' : 'light'); };
   const setBubbles = (next: boolean) => { setBubblesState(next); saveAppearance(APPEARANCE_KEYS.bubbles, next ? 'on' : 'off'); };
   const setColorStyle = (next: ColorStyleId) => { setColorStyleState(next); saveAppearance(APPEARANCE_KEYS.colorStyle, next); };
+  const renameToy = async (draft: string) => { setNickname(await nicknamePreference.save(draft)); };
+  const resetToyName = async () => { await nicknamePreference.reset(); setNickname(null); };
 
   const progress = useMemo(() => ({
     ...scores.progress,
@@ -161,7 +169,8 @@ export function useJimmy() {
     connectorKind: connection.connectorKind,
     connect: () => { connection.connect().catch(() => undefined); },
     disconnect: () => { connection.disconnect().catch(() => undefined); },
-    toyName: connection.info ? `Jimmy ${connection.info.deviceId.slice(-4).toUpperCase()}` : 'Jimmy',
+    toyName: nickname ?? (connection.info ? `Jimmy ${connection.info.deviceId.slice(-4).toUpperCase()}` : 'Jimmy'),
+    renameToy, resetToyName,
     batteryPercent: toy?.batteryPercent ?? null,
     /** For stylus games: the stylus lives in Jimmy. */
     toy: { connected: toy !== null, stylusStowed: toy?.switches.stylusStowed ?? false },
