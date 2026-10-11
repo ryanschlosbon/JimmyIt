@@ -32,7 +32,7 @@ export function DrawingCanvas({ strokes, dispatch, color, brushSize, shapes, the
     onResponderRelease={() => { drawing.current = false; }}
     onResponderTerminate={() => { drawing.current = false; }} onResponderTerminationRequest={() => false}
     style={{ width: '100%', height,
-      backgroundColor: theme.art.paper, borderRadius: RADIUS.lg, overflow: 'hidden',
+      backgroundColor: theme.canvas, borderRadius: RADIUS.lg, overflow: 'hidden',
       borderWidth: ART.borderWidth, borderColor: theme.teal,
       ...(Platform.OS === 'web' ? { touchAction: 'none' } : {}) }}>
     <Svg width="100%" height="100%" viewBox="0 0 1000 650" preserveAspectRatio="none" pointerEvents="none">

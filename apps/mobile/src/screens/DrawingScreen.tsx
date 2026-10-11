@@ -24,14 +24,16 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
   const color = theme.art.colors.find(swatch => swatch.name === colorName)?.color ?? theme.ink;
   const shapes = activity === 'shapes';
   const panelStyle = {
-    backgroundColor: theme.raised, borderColor: theme.art.panelBorder, borderWidth: ART.borderWidth,
+    backgroundColor: theme.dark ? theme.surface : theme.raised,
+    borderColor: theme.art.panelBorder, borderWidth: ART.borderWidth,
     borderRadius: RADIUS.lg, padding: SPACE.sm,
   } as const;
   const tools = <View accessibilityLabel="Art colors and brush sizes"
     style={{ width: compact ? '100%' : sidebarWidth, gap: SPACE.sm }}>
     <Button theme={theme} label="All games" icon="chevronLeft" compact onPress={onAllGames}
       style={{ width: '100%', paddingHorizontal: SPACE.xs }} />
-    <View style={panelStyle}>
+    <View style={{ height: compact ? undefined : canvasHeight, gap: SPACE.sm }}>
+    <View style={[panelStyle, { flexGrow: 1, justifyContent: 'center' }]}>
       <View accessibilityRole="radiogroup" accessibilityLabel="Drawing color"
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'center' }}>
         {theme.art.colors.map(swatch => {
@@ -49,7 +51,7 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
         })}
       </View>
     </View>
-    <View style={panelStyle}>
+    <View style={[panelStyle, { flexGrow: 1, justifyContent: 'center' }]}>
       <View accessibilityRole="radiogroup" accessibilityLabel="Brush size"
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'center' }}>
         {ART_BRUSH_SIZES.map(size => <Tappable key={size} accessibilityRole="radio"
@@ -68,9 +70,10 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
         </Tappable>)}
       </View>
     </View>
+    </View>
   </View>;
 
-  return <View style={{ flexDirection: compact ? 'column' : 'row', gap: SPACE.lg, alignItems: 'flex-start' }}>
+  return <View style={{ flexDirection: compact ? 'column' : 'row', gap: SPACE.sm, alignItems: 'flex-start' }}>
     {!compact && tools}
     <View style={{ flex: compact ? undefined : 1, width: compact ? '100%' : undefined, minWidth: 0, gap: SPACE.sm }}>
       <View style={{ alignSelf: 'center', minHeight: ART.titleHeight, justifyContent: 'center',

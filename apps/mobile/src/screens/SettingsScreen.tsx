@@ -7,7 +7,6 @@ import { Body, Button, Eyebrow, Heading, ProgressBar, SwitchRow } from '../compo
 import { COLOR_STYLES, COLOR_STYLE_IDS } from '../design/palettes';
 import { FONTS, RADIUS, SETTINGS, SIZE, SPACE, TYPE } from '../design/tokens';
 import { Icon, type IconName } from '../components/Icon';
-import { Jimmy } from '../components/Jimmy';
 import { Tappable } from '../components/Tappable';
 import { JIMMY_NICKNAME_MAX_LENGTH, JimmyNicknameError } from '../jimmy-nickname';
 import { APP_ARTWORK } from '../artwork';
@@ -21,6 +20,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
   const compact = width < SETTINGS.columnBreakpoint;
   const phone = width < SIZE.compactWidth;
   const [showMore, setShowMore] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameBusy, setNameBusy] = useState(false);
@@ -113,7 +113,9 @@ export function SettingsScreen({ theme, state, replayIntro }: {
         borderWidth: SETTINGS.borderWidth, borderColor: theme.teal,
         padding: phone ? SPACE.lg : SPACE.xl, flexDirection: 'row', alignItems: 'center',
         flexWrap: 'wrap', gap: SPACE.lg }}>
-        <Jimmy face size={phone ? SETTINGS.phoneFaceSize : SETTINGS.faceSize} color={theme.coral} />
+        <Image source={APP_ARTWORK.settingsJimmy} resizeMode="contain" accessible={false}
+          style={{ width: phone ? SETTINGS.phoneFaceSize : SETTINGS.faceSize,
+            height: phone ? SETTINGS.phoneFaceSize : SETTINGS.faceSize }} />
         <View style={{ flex: 1, minWidth: phone ? SETTINGS.phoneFaceSize : SETTINGS.heroArtSize, gap: SPACE.xs }}>
           <Eyebrow theme={theme}>Your Jimmy</Eyebrow>
           <Heading theme={theme} size={phone ? TYPE.subheading : TYPE.heading}>{state.toyName}</Heading>
@@ -206,7 +208,20 @@ export function SettingsScreen({ theme, state, replayIntro }: {
         icon="toy" onPress={state.calibrate} disabled={state.connection !== 'connected' || state.calibrating} />
       {state.connection !== 'connected' && <Body theme={theme} small>Connect Jimmy first.</Body>}
     </View>
-    <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5,
+    </View>}
+    <Tappable accessibilityLabel="Advanced settings" accessibilityState={{ expanded: showAdvanced }}
+      accessibilityHint="Shows API settings and activity previews."
+      onPress={() => setShowAdvanced(!showAdvanced)} focusColor={theme.focus}
+      style={{ minHeight: SIZE.touchTarget, padding: SPACE.lg, borderRadius: RADIUS.md,
+        borderWidth: SETTINGS.borderWidth, borderColor: theme.border, backgroundColor: theme.surface,
+        flexDirection: 'row', alignItems: 'center', gap: SPACE.md }}>
+      <Icon name="settings" color={theme.text} />
+      <Text style={{ flex: 1, fontFamily: FONTS.bodyBold, fontSize: TYPE.body, color: theme.text }}>Advanced settings</Text>
+      <View style={{ transform: [{ rotate: showAdvanced ? '90deg' : '0deg' }] }}>
+        <Icon name="chevronRight" color={theme.text} />
+      </View>
+    </Tappable>
+    {showAdvanced && <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5,
       borderRadius: 22, padding: 24, gap: 18 }}>
       <View style={{ gap: 5 }}><Eyebrow theme={theme}>OPTIONAL ACTIVITY IDEAS</Eyebrow>
         <Heading theme={theme} size={30}>AI play settings</Heading>
@@ -234,7 +249,8 @@ export function SettingsScreen({ theme, state, replayIntro }: {
         <TextInput editable={!keyBusy} secureTextEntry value={keyDraft} onChangeText={setKeyDraft}
           autoCapitalize="none" autoCorrect={false} placeholder="Tap here and paste your Gemini key"
           accessibilityLabel="Gemini API key" style={{ borderWidth: 1.5,
-            borderColor: theme.border, borderRadius: 14, padding: 14, color: theme.text }} />
+            borderColor: theme.border, borderRadius: RADIUS.sm, padding: SPACE.lg, color: theme.text,
+            minHeight: SIZE.touchTarget, fontFamily: FONTS.body, fontSize: TYPE.small }} />
         <Body theme={theme} small>This local preview sends your key to the AI service on this computer. It stays in
           memory for up to 30 minutes and is never saved with your app settings. Paste into the field, then save.</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -301,7 +317,8 @@ export function SettingsScreen({ theme, state, replayIntro }: {
               `${recommendation.suggestedResponseWindowMs / 1000} seconds per target`}</Body>
         </View>}
       </View>
-    </View>
+    </View>}
+    {showMore && <View style={{ gap: SPACE.xl }}>
     <View style={{ flexDirection: 'row', gap: 14, backgroundColor: theme.raised, borderRadius: 18, padding: 22 }}>
       <Icon name="sparkle" color={theme.gold} />
       <View style={{ flex: 1, gap: 4 }}><Heading theme={theme} size={23}>A safe place to practice</Heading>

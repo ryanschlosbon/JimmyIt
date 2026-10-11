@@ -53,7 +53,7 @@ export const TYPE = {
 
 /** Art fills the available screen; short windows use an extra tool column. */
 export const ART = {
-  canvasMinHeight: 320, phoneCanvasHeight: 360, titleHeight: 48,
+  canvasMinHeight: 320, phoneCanvasHeight: 360, titleHeight: 56,
   viewportChromeHeight: 128,
   actionHeight: 56, actionIcon: 28, faceSize: 40,
   swatchRadius: 10,
@@ -72,6 +72,11 @@ export const ACTIVITY_HEADER = {
 
 export const TAP_QUEST_VIEW = {
   boardMaxWidth: 560, borderWidth: 2, targetBorderWidth: 3, pathDotSize: 6,
+} as const;
+
+/** The supplied Rewards banner keeps its full proportions on tablets. */
+export const REWARDS = {
+  bannerAspectRatio: 2360 / 553, phoneBannerHeight: 232, phoneFaceSize: 56,
 } as const;
 
 /** Settings proportions follow the grown-ups' area reference. */

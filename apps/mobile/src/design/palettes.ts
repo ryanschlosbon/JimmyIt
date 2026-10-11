@@ -61,11 +61,20 @@ export interface Palette {
   /** Background bubbles pick from these. */
   readonly bubbles: readonly string[];
   readonly bubbleOpacity: number;
+  /** Neutral artwork for badges that have not been earned yet. */
+  readonly lockedBadge: { readonly background: string; readonly paper: string; readonly ink: string };
   /** The "High Score" pill and number on banners. */
   readonly score: { readonly pill: string; readonly pillText: string; readonly value: string };
   /** Page dots under the game shelf. */
   readonly dot: string;
   readonly dotActive: string;
+  /** Supplied Rewards artwork and its readable phone version. */
+  readonly rewardsBanner: {
+    readonly background: string;
+    readonly text: string;
+    readonly eyebrow: string;
+    readonly bubble: string;
+  };
   readonly banners: Readonly<Record<BannerColorName, BannerColors>>;
   /** Inner game headers, adapted from the supplied bubble banners. */
   readonly activityHeaders: {
@@ -98,16 +107,18 @@ const classicLight: Palette = {
   page: '#FFFFFF', surface: '#FFFFFF', raised: '#F4F6F6', canvas: '#FFFFFF',
   header: 'rgba(254, 249, 237, 0.9)', headerBorder: '#ECE9E1', sheet: 'rgba(255, 255, 255, 0.88)', border: '#E3E7E8', scrim: 'rgba(15, 29, 51, 0.7)',
   text: '#183153', secondary: '#55657A', ink: '#111111', focus: '#9A6E00', accentText: '#087C71', gold: '#8A6500',
-  coral: '#EF6B62', yellow: '#F5C84C', mint: '#67D0B1', teal: '#18A999', navy: '#183153',
+  coral: '#EF6B62', yellow: '#FFD844', mint: '#67D0B1', teal: '#18A999', navy: '#183153',
   berry: '#7A0B5A', purple: '#8E6BCD', pink: '#F1DCEB',
   softMint: '#E5F8F5', softCoral: '#FFEDEA', softPurple: '#F1EAF8',
-  nav: { play: '#18A999', rewards: '#EF6B62', settings: '#F5C84C' },
-  bubbles: ['#EF6B62', '#F5C84C', '#67D0B1'],
+  nav: { play: '#18A999', rewards: '#EF6B62', settings: '#FFD844' },
+  bubbles: ['#EF6B62', '#FFD844', '#67D0B1'],
   bubbleOpacity: 1,
+  lockedBadge: { background: '#E3E5E7', paper: '#F8F8F8', ink: '#62676D' },
   score: { pill: '#7A0B5A', pillText: '#FFFFFF', value: '#7A0B5A' },
   dot: '#EF6B62', dotActive: '#18A999',
+  rewardsBanner: { background: '#EF6B62', text: '#FFFFFF', eyebrow: '#7A0B5A', bubble: '#FFFFFF' },
   activityHeaders: {
-    timed: { background: '#F5C84C', text: '#183153' },
+    timed: { background: '#FFD844', text: '#183153' },
     tapQuest: { background: '#18A999', text: '#000000' },
     bubble: '#FFFFFF', face: '#7A0B5A', shadow: '#DDE4E4',
   },
@@ -126,7 +137,7 @@ const classicLight: Palette = {
     mint: { background: '#E5F8F5', border: '#C9EEE6', accent: '#18A999', shadow: '#2BB8A3', chip: '#FFFFFF' },
     lilac: { background: '#F1ECFC', border: '#DDD2F6', accent: '#A88BEB', shadow: '#A88BEB', chip: '#FFFFFF' },
     peach: { background: '#FFEDEA', border: '#FAD4CE', accent: '#EF6B62', shadow: '#F29A8F', chip: '#FFFFFF' },
-    butter: { background: '#FFF6DB', border: '#F8E4A8', accent: '#F5C84C', shadow: '#F0B92E', chip: '#FFFFFF' },
+    butter: { background: '#FFF6DB', border: '#F8E4A8', accent: '#FFD844', shadow: '#F0B92E', chip: '#FFFFFF' },
     sky: { background: '#E7F3FD', border: '#CCE4F8', accent: '#6FB5EE', shadow: '#6FB5EE', chip: '#FFFFFF' },
     rose: { background: '#FCEAF3', border: '#F4CFE2', accent: '#E58BBE', shadow: '#E58BBE', chip: '#FFFFFF' },
   },
@@ -134,21 +145,34 @@ const classicLight: Palette = {
 
 const classicDark: Palette = {
   ...classicLight,
-  page: '#0F1D33', surface: '#183153', raised: '#234068', canvas: '#183153',
+  lockedBadge: { background: '#383B40', paper: '#24272B', ink: '#C1C4C8' },
+  page: '#0F1D33', surface: '#183153', raised: '#234068', canvas: '#234068',
   header: 'rgba(15, 29, 51, 0.88)', headerBorder: '#2E4A73', sheet: 'rgba(15, 29, 51, 0.86)', border: '#2E4A73', scrim: 'rgba(5, 10, 20, 0.75)',
-  text: '#F7F7F7', secondary: '#B8C4D6', focus: '#F5C84C', accentText: '#67D0B1', gold: '#F5C84C',
+  text: '#F7F7F7', secondary: '#B8C4D6', focus: '#FFD844', accentText: '#68D0B2', gold: '#FFD844',
+  coral: '#F2786E', yellow: '#FFD844', mint: '#68D0B2', teal: '#2BB8A3',
   softMint: '#234C51', softCoral: '#553B4C', softPurple: '#393B60',
   berry: '#C455A6',
-  art: { ...classicLight.art, panelBorder: '#8798B0' },
-  bubbleOpacity: 0.32,
-  score: { pill: '#C455A6', pillText: '#FFFFFF', value: '#F2A8DC' },
+  nav: { play: '#2BB8A3', rewards: '#F2786E', settings: '#FFD844' },
+  bubbles: ['#F2786E', '#FFD844', '#68D0B2'],
+  dot: '#F2786E', dotActive: '#2BB8A3',
+  activityHeaders: {
+    timed: { background: '#FFD844', text: '#183153' },
+    tapQuest: { background: '#2BB8A3', text: '#111111' },
+    bubble: '#F7F7F7', face: '#183153', shadow: '#2E4A73',
+  },
+  art: {
+    ...classicLight.art,
+    guide: '#B8C4D6', panelBorder: '#2E4A73', titleBackground: '#2BB8A3', titleText: '#111111',
+  },
+  bubbleOpacity: 1,
+  score: { pill: '#C455A6', pillText: '#111111', value: '#C455A6' },
   banners: {
-    mint: { background: '#1D4249', border: '#2A5A60', accent: '#4FCBB4', shadow: '#2BB8A3', chip: '#183153' },
-    lilac: { background: '#2E2F55', border: '#43457A', accent: '#B9A1F2', shadow: '#8E6BCD', chip: '#183153' },
-    peach: { background: '#4A3045', border: '#64405B', accent: '#F58C84', shadow: '#EF6B62', chip: '#183153' },
-    butter: { background: '#43402F', border: '#5C573D', accent: '#F5C84C', shadow: '#C99B21', chip: '#183153' },
-    sky: { background: '#1F3A5C', border: '#2E5280', accent: '#8CC6F2', shadow: '#4C93D0', chip: '#183153' },
-    rose: { background: '#45304A', border: '#5E4166', accent: '#EDA3CC', shadow: '#D16EA6', chip: '#183153' },
+    mint: { background: '#183153', border: '#2E4A73', accent: '#68D0B2', shadow: '#2BB8A3', chip: '#234068' },
+    lilac: { background: '#183153', border: '#2E4A73', accent: '#C455A6', shadow: '#C455A6', chip: '#234068' },
+    peach: { background: '#183153', border: '#2E4A73', accent: '#F2786E', shadow: '#F2786E', chip: '#234068' },
+    butter: { background: '#183153', border: '#2E4A73', accent: '#FFD844', shadow: '#FFD844', chip: '#234068' },
+    sky: { background: '#183153', border: '#2E4A73', accent: '#2BB8A3', shadow: '#2BB8A3', chip: '#234068' },
+    rose: { background: '#183153', border: '#2E4A73', accent: '#C455A6', shadow: '#C455A6', chip: '#234068' },
   },
 };
 
