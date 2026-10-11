@@ -10,7 +10,15 @@ import { drawingReducer, freeDrawing, strokeToPath, type DrawingGameAction, type
 import { type ShapeRecognitionAction, type ShapeRecognitionState, type TargetShape } from '@jimmyit/game-shape-recognition';
 import { type TapQuestAction, type TapQuestMode, type TapQuestState } from '@jimmyit/game-tap-quest';
 import { createTimedPractice, type TimedPracticeState } from '@jimmyit/game-timed-practice';
-import { COLOR_STYLES } from '../../mobile/src/design/palettes';
+import { createButtonHeroGame, type ButtonHeroAction, type ButtonHeroDifficulty,
+  type ButtonHeroState } from '@jimmyit/game-button-hero';
+import { ButtonHeroView } from '@jimmyit/game-button-hero/view';
+import { createKnobQuestGame, type KnobQuestAction, type KnobQuestDifficulty,
+  type KnobQuestState } from '@jimmyit/game-knob-quest';
+import { KnobQuestView } from '@jimmyit/game-knob-quest/view';
+import { COLOR_STYLES, type Palette } from '../../mobile/src/design/palettes';
+import { attachGameKeyboard } from '../../mobile/src/game-keyboard.web';
+import { dispatchGameInput } from '../../mobile/src/game-input';
 import { PLAY_SHELF, type ShelfGameId } from '../../mobile/src/games';
 import faceArt from '../../mobile/assets/intro-face.png';
 import rewardsBanner from '../../mobile/assets/rewards-banner.png';
@@ -25,7 +33,7 @@ import './style.css';
 import './mobile-parity.css';
 
 type Page = 'play' | 'rewards' | 'settings';
-type Game = 'timed' | 'tap' | 'drawing' | 'shapes';
+type Game = 'timed' | 'tap' | 'drawing' | 'shapes' | 'buttonHero' | 'knobQuest';
 type InputMode = 'keyboard' | 'toy';
 
 const toWebGame = (id: ShelfGameId): Game => id === 'tapQuest' ? 'tap' : id;
@@ -76,7 +84,8 @@ function App() {
       <Header page={page} onNavigate={navigate} />
       <main className="content">
         {page === 'play' && (game ? <GamePage key={game} game={game} option={gameOption} inputMode={inputMode}
-          toy={toy} onBack={() => setGame(null)} />
+          toy={toy} palette={COLOR_STYLES[calm ? 'calm' : 'classic'][dark ? 'dark' : 'light']}
+          onBack={() => setGame(null)} />
           : <PlayPage index={shelfIndex} onIndex={setShelfIndex} choices={choices}
             onChoice={(id, value) => setChoices((current) => ({ ...current, [id]: value }))}
             inputMode={inputMode} dark={dark} calm={calm}
@@ -194,11 +203,13 @@ function PlayPage({ index, onIndex, choices, onChoice, inputMode, dark, calm, on
   </>;
 }
 
-function GamePage({ game, option, inputMode, toy, onBack }: { game: Game; option: string | null;
-  inputMode: InputMode; toy: FakeFidget; onBack: () => void }) {
+function GamePage({ game, option, inputMode, toy, palette, onBack }: { game: Game; option: string | null;
+  inputMode: InputMode; toy: FakeFidget; palette: Palette; onBack: () => void }) {
   return <section className="game-page"><button className="back" onClick={onBack}>← All games</button>
     {game === 'timed' ? <TimedGame inputMode={inputMode} toy={toy} initialSeconds={Number(option ?? 30000) / 1000} />
       : game === 'tap' ? <TapGame initialMode={(option ?? 'precision') as TapQuestMode} />
+      : game === 'buttonHero' ? <ButtonHeroGame palette={palette} />
+      : game === 'knobQuest' ? <KnobQuestGame palette={palette} />
         : <DrawingGame key={game} shape={game === 'shapes'} />}</section>;
 }
 
@@ -261,6 +272,45 @@ function TimedGame({ inputMode, toy, initialSeconds }: { inputMode: InputMode; t
         }}>{['Press button', 'Spin dial', 'Turn screw'][index]} <kbd>{['J', 'K', 'L'][index]}</kbd></button>
           : <span>{['Button presses', 'Dial spins', 'Screw turns'][index]}</span>}</div>)}
     </aside></div></>;
+}
+
+/** Pauses a running game when the browser tab is hidden, like the phone app does when it goes to the background. */
+function usePauseWhenHidden(pause: () => void) {
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) pause(); };
+    document.addEventListener('visibilitychange', hidden);
+    return () => document.removeEventListener('visibilitychange', hidden);
+  }, [pause]);
+}
+
+// Button Hero and Knob Quest render the same views as the phone app; the keyboard uses the phone app's web adapter.
+function ButtonHeroGame({ palette }: { palette: Palette }) {
+  const run = useGameRun<ButtonHeroState, ButtonHeroAction>();
+  const [difficulty, setDifficulty] = useState<ButtonHeroDifficulty>('normal');
+  const submit = useRef(run.submit);
+  submit.current = run.submit;
+  useEffect(() => attachGameKeyboard('buttonHero', (event) =>
+    dispatchGameInput(event, (action) => submit.current(action), () => undefined)), []);
+  usePauseWhenHidden(run.pause);
+  return <ButtonHeroView state={run.state} status={run.status} difficulty={difficulty} theme={palette}
+    onDifficulty={setDifficulty} onStart={() => run.start(createButtonHeroGame({ difficulty }), { tickMs: 40 })}
+    onPause={run.pause} onResume={run.resume} onButton={(action) => run.submit(action)} />;
+}
+
+function KnobQuestGame({ palette }: { palette: Palette }) {
+  const run = useGameRun<KnobQuestState, KnobQuestAction>();
+  const [difficulty, setDifficulty] = useState<KnobQuestDifficulty>('normal');
+  const seed = useRef(0);
+  const submit = useRef(run.submit);
+  submit.current = run.submit;
+  useEffect(() => attachGameKeyboard('knobQuest', (event) =>
+    dispatchGameInput(event, () => undefined, (action) => submit.current(action))), []);
+  usePauseWhenHidden(run.pause);
+  return <KnobQuestView state={run.state} status={run.status} difficulty={difficulty} theme={palette}
+    onDifficulty={setDifficulty} onStart={() => {
+      seed.current++;
+      run.start(createKnobQuestGame(undefined, difficulty, seed.current), { tickMs: 40 });
+    }} onAxis={(action) => run.submit(action)} />;
 }
 
 function TapGame({ initialMode }: { initialMode: TapQuestMode }) {

@@ -22,7 +22,7 @@ export const APP_ARTWORK: Readonly<{
   settingsGrownUps: require('../assets/grown-ups.png'),
   settingsJimmy: require('../assets/settings-jimmy.png'),
   rewardsBanner: require('../assets/rewards-banner.png'),
-  bannerArt: { timed: null, tapQuest: null, drawing: null, shapes: null },
+  bannerArt: { timed: null, tapQuest: null, drawing: null, shapes: null, buttonHero: null, knobQuest: null },
 };
 
 // The opening animation's mint background and the coral that closes in around Jimmy.

@@ -13,13 +13,16 @@
     "@jimmyit/app-kit": "*",
     "@jimmyit/core": "*",
     "@jimmyit/fake-fidget": "*",
+    "@jimmyit/game-button-hero": "*",
     "@jimmyit/game-drawing": "*",
+    "@jimmyit/game-knob-quest": "*",
     "@jimmyit/game-shape-recognition": "*",
     "@jimmyit/game-tap-quest": "*",
     "@jimmyit/game-timed-practice": "*",
     "@jimmyit/protocol": "*",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-native-web": "^0.21.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",

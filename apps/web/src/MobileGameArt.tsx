@@ -1,6 +1,6 @@
-// Browser rendering of the four illustrations in apps/mobile/src/components/GameArt.tsx.
+// Browser rendering of the illustrations in apps/mobile/src/components/GameArt.tsx.
 // Keep their paths aligned with the mobile shelf when its artwork changes.
-export type MobileGameArtName = 'stopwatch' | 'target' | 'brush' | 'shapes';
+export type MobileGameArtName = 'stopwatch' | 'target' | 'brush' | 'shapes' | 'rhythm' | 'dualKnobs';
 
 export function MobileGameArt({ name, ink, accent, shadow }: {
   readonly name: MobileGameArtName;
@@ -53,6 +53,25 @@ export function MobileGameArt({ name, ink, accent, shadow }: {
       <rect x="56" y="14" width="30" height="30" rx="7" fill={accent} stroke={ink} strokeWidth="5"
         transform="rotate(12 71 29)" />
       <polygon points="68,52 86,80 50,80" fill="none" stroke={ink} strokeWidth="5" strokeLinejoin="round" />
+    </>}
+    {name === 'rhythm' && <>
+      <ellipse cx="50" cy="90" rx="34" ry="3.2" fill={shadow} />
+      <line x1="10" y1="55" x2="90" y2="55" stroke={ink} strokeWidth="5" strokeLinecap="round" />
+      <circle cx="32" cy="55" r="20" fill={accent} stroke={ink} strokeWidth="5" />
+      <circle cx="26" cy="51" r="2.5" fill={ink} /><circle cx="38" cy="51" r="2.5" fill={ink} />
+      <path d="M25 61q7 8 14 0" {...line} strokeWidth="3" />
+      <circle cx="72" cy="55" r="12" fill="none" stroke={ink} strokeWidth="5" />
+      <line x1="70" y1="20" x2="70" y2="31" {...line} />
+      <line x1="77" y1="16" x2="77" y2="27" {...line} />
+    </>}
+    {name === 'dualKnobs' && <>
+      <ellipse cx="50" cy="90" rx="34" ry="3.2" fill={shadow} />
+      <path d="M14 72h21V59h28V47h23" {...line} />
+      <circle cx="30" cy="33" r="15" fill={accent} stroke={ink} strokeWidth="5" />
+      <circle cx="72" cy="31" r="15" fill="none" stroke={ink} strokeWidth="5" />
+      <line x1="30" y1="33" x2="30" y2="23" {...line} />
+      <line x1="72" y1="31" x2="81" y2="27" {...line} />
+      <path d="M46 58l4-7 4 7Z" fill={accent} stroke={ink} strokeWidth="3" strokeLinejoin="round" />
     </>}
   </svg>;
 }

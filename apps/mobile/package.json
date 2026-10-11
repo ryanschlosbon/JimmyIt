@@ -19,6 +19,8 @@
     "@jimmyit/ble-react-native": "*",
     "@jimmyit/core": "*",
     "@jimmyit/game-drawing": "*",
+    "@jimmyit/game-button-hero": "*",
+    "@jimmyit/game-knob-quest": "*",
     "@jimmyit/game-sdk": "*",
     "@jimmyit/game-shape-recognition": "*",
     "@jimmyit/game-tap-quest": "*",

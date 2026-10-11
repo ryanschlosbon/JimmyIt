@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Game views are React Native components shared with the phone app; react-native-web draws them in the browser.
+  resolve: { alias: { 'react-native': 'react-native-web' } },
   build: { outDir: 'dist' },
   server: {
     host: '127.0.0.1',
