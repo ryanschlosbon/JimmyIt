@@ -10,6 +10,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--focus); out
 .ambient-one { background: var(--bubbleOne); }
 .ambient-two { background: var(--bubbleTwo); }
 .header { background: var(--header); border-color: var(--headerBorder); }
+.brand-name { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
+/* "Webspace" under the logo tells the browser playspace apart from the phone app, at every width. */
+.brand .brand-name small { display: block; align-self: flex-start; margin: 4px 0 0 2px; font: 700 .78rem 'Poppins', sans-serif;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--accentText); white-space: nowrap; }
 .header-inner { max-width: 1440px; gap: 16px; }
 .brand { color: var(--text); font-size: 2.65rem; }
 .brand .face { width: 62px; height: 62px; border: 0; border-radius: 50%; transform: none; object-fit: cover; }
@@ -145,3 +149,26 @@ footer { border-color: var(--border); color: var(--secondary); }
   .nav-item { width: 52px; height: 52px; }
   .game-banner { padding: 18px; }
 }
+
+/* Score at the top of each game; score moments celebrate here without covering play (GameScoreBar on mobile). */
+.score-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: 64px; padding: 8px 16px;
+  margin-bottom: 16px; border-radius: 24px; background: var(--surface); border: 2px solid var(--border); }
+.score-bar.celebrating { border-color: var(--accentText); }
+.score-bar.big { border-color: var(--yellow); }
+.score-bar-label { font: 700 .875rem 'Poppins', sans-serif; letter-spacing: .14em; color: var(--secondary); }
+.score-bar-value { position: relative; display: inline-block; }
+.score-bar-value strong { display: inline-block; font: 800 1.9rem 'Baloo 2', sans-serif; color: var(--text); }
+.celebrating .score-bar-value strong { animation: score-pop 600ms cubic-bezier(.3, 1.6, .5, 1); }
+.big .score-bar-value strong { animation-name: score-pop-big; }
+.score-spark { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px; border-radius: 2px;
+  background: var(--spark); opacity: 0; pointer-events: none; animation: score-spark 700ms ease-out; }
+.score-spark:nth-child(odd) { border-radius: 50%; }
+.score-chip { margin-left: auto; padding: 6px 16px; border-radius: 999px; background: var(--softMint); color: var(--text);
+  font: 800 1.4rem 'Baloo 2', sans-serif; animation: chip-in 450ms cubic-bezier(.3, 1.6, .5, 1); }
+.big .score-chip { background: var(--yellow); color: var(--navy); }
+.celebration { top: 96px; bottom: auto; pointer-events: none; }
+@keyframes score-pop { from { transform: scale(1.35); } to { transform: scale(1); } }
+@keyframes score-pop-big { from { transform: scale(1.5); } to { transform: scale(1); } }
+@keyframes score-spark { 15% { opacity: 1; } to { opacity: 0;
+  transform: rotate(var(--angle)) translateX(var(--reach)) rotate(180deg); } }
+@keyframes chip-in { from { opacity: 0; transform: scale(.6); } }

@@ -1,4 +1,5 @@
-import { StrictMode, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { StrictMode, useEffect, useMemo, useRef, useState, type CSSProperties,
+  type PointerEvent as ReactPointerEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createJimmyServices, JimmyServicesProvider, useCelebration, useConnection, useGameRun, useScores,
   useToyState } from '@jimmyit/app-kit';
@@ -23,6 +24,7 @@ import { PLAY_SHELF, type ShelfGameId } from '../../mobile/src/games';
 import faceArt from '../../mobile/assets/intro-face.png';
 import rewardsBanner from '../../mobile/assets/rewards-banner.png';
 import settingsJimmy from '../../mobile/assets/settings-jimmy.png';
+import { JimmyFace } from './JimmyFace';
 import { MobileGameArt } from './MobileGameArt';
 import { createWebShapeRecognizer, isShapeAIConfigured } from './shape-ai';
 import { createWebBluetoothConnector, isWebBluetoothAvailable } from './web-bluetooth';
@@ -70,7 +72,8 @@ function App() {
     const values = { page: palette.page, surface: palette.surface, sheet: palette.sheet, text: palette.text,
       secondary: palette.secondary, ink: palette.ink, border: palette.border, header: palette.header,
       headerBorder: palette.headerBorder, focus: palette.focus, mint: palette.mint, coral: palette.coral,
-      yellow: palette.yellow, teal: palette.teal, berry: palette.berry, navy: palette.navy,
+      yellow: palette.yellow, teal: palette.teal, berry: palette.berry, navy: palette.navy, purple: palette.purple,
+      accentText: palette.accentText, softMint: palette.softMint,
       bubbleOne: palette.bubbles[0] ?? palette.coral, bubbleTwo: palette.bubbles[1] ?? palette.yellow,
       bubbleThree: palette.bubbles[2] ?? palette.mint };
     Object.entries(values).forEach(([name, value]) => root.style.setProperty(`--${name}`, value));
@@ -104,7 +107,8 @@ function Header({ page, onNavigate }: { page: Page; onNavigate: (next: Page) => 
   const connection = useConnection();
   return <header className="header"><div className="header-inner">
     <button className="brand" onClick={() => onNavigate('play')} aria-label="JimmyIt Play home">
-      <img className="face" src={faceArt} alt="" /><span>JimmyIt</span>
+      <img className="face" src={faceArt} alt="" />
+      <span className="brand-name">JimmyIt<small>Webspace</small></span>
     </button>
     <span className={`connection-pill ${connection.status}`} role="status">
       <span aria-hidden="true">●</span> {connection.status === 'connected' ? 'Jimmy connected'
@@ -239,7 +243,8 @@ function TimedGame({ inputMode, toy, initialSeconds }: { inputMode: InputMode; t
       setStartError('Your play input is still getting ready. Please try again.');
     }
   };
-  return <><GameTitle eyebrow="MOVE & DISCOVER" title="Timed Run" description="Go at your own pace. Every move counts." />
+  return <><ScoreBar score={run.score?.score ?? 0} />
+    <GameTitle eyebrow="MOVE & DISCOVER" title="Timed Run" description="Go at your own pace. Every move counts." />
     <div className="game-layout"><div className="play-panel timer-panel">
       <div className="choices" role="group" aria-label="Practice length">{[30, 60, 90].map((value) => <button
         key={value} className={seconds === value ? 'choice chosen' : 'choice'} disabled={active}
@@ -292,9 +297,9 @@ function ButtonHeroGame({ palette }: { palette: Palette }) {
   useEffect(() => attachGameKeyboard('buttonHero', (event) =>
     dispatchGameInput(event, (action) => submit.current(action), () => undefined)), []);
   usePauseWhenHidden(run.pause);
-  return <ButtonHeroView state={run.state} status={run.status} difficulty={difficulty} theme={palette}
+  return <><ScoreBar score={run.score?.score ?? 0} /><ButtonHeroView state={run.state} status={run.status} difficulty={difficulty} theme={palette}
     onDifficulty={setDifficulty} onStart={() => run.start(createButtonHeroGame({ difficulty }), { tickMs: 40 })}
-    onPause={run.pause} onResume={run.resume} onButton={(action) => run.submit(action)} />;
+    onPause={run.pause} onResume={run.resume} onButton={(action) => run.submit(action)} /></>;
 }
 
 function KnobQuestGame({ palette }: { palette: Palette }) {
@@ -306,11 +311,13 @@ function KnobQuestGame({ palette }: { palette: Palette }) {
   useEffect(() => attachGameKeyboard('knobQuest', (event) =>
     dispatchGameInput(event, () => undefined, (action) => submit.current(action))), []);
   usePauseWhenHidden(run.pause);
-  return <KnobQuestView state={run.state} status={run.status} difficulty={difficulty} theme={palette}
+  return <><ScoreBar score={run.score?.score ?? 0} />
+    <KnobQuestView state={run.state} status={run.status} difficulty={difficulty} theme={palette}
+    renderPlayer={({ size, color }) => <JimmyFace size={size} color={color} />}
     onDifficulty={setDifficulty} onStart={() => {
       seed.current++;
       run.start(createKnobQuestGame(undefined, difficulty, seed.current), { tickMs: 40 });
-    }} onAxis={(action) => run.submit(action)} />;
+    }} onAxis={(action) => run.submit(action)} /></>;
 }
 
 function TapGame({ initialMode }: { initialMode: TapQuestMode }) {
@@ -329,7 +336,8 @@ function TapGame({ initialMode }: { initialMode: TapQuestMode }) {
     run.submit({ type: 'touch', phase, point });
   };
   const start = () => { run.start(createAdaptiveTapGame(mode, scores.records, seed), { tickMs: 100 }); setSeed(seed + 1); };
-  return <><GameTitle eyebrow="TAP & TRACE" title="Tap Quest" description="Steady taps, paths and patterns. Near misses count too." />
+  return <><ScoreBar score={run.score?.score ?? 0} />
+    <GameTitle eyebrow="TAP & TRACE" title="Tap Quest" description="Steady taps, paths and patterns. Near misses count too." />
     <div className="play-panel tap-panel"><div className="choices" role="group" aria-label="Tap Quest mode">
       {TAP_MODES.map((item) => <button className={mode === item ? 'choice chosen' : 'choice'} key={item}
         disabled={active} onClick={() => setMode(item)}>{item[0]?.toUpperCase()}{item.slice(1)}</button>)}</div>
@@ -560,9 +568,39 @@ function GameTitle({ eyebrow, title, description }: { eyebrow: string; title: st
   return <div className="game-title"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div>;
 }
 
+const SPARK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+const SPARK_COLORS = ['var(--yellow)', 'var(--coral)', 'var(--mint)', 'var(--purple)'];
+
+/**
+ * The running score at the top of a game, as in the phone app's GameScoreBar: score moments celebrate here, in place,
+ * so play is never interrupted. The number pops, sparks fly off it once, and a chip says what happened.
+ */
+function ScoreBar({ score }: { score: number }) {
+  const live = useCelebration();
+  const celebration = live && live.event.source === 'app' && live.kind !== 'bestAtEnd' ? live : null;
+  const [burst, setBurst] = useState(0);
+  useEffect(() => { if (celebration) setBurst((count) => count + 1); }, [celebration]);
+  const big = celebration?.kind === 'newBest';
+  return <div className={`score-bar${celebration ? ' celebrating' : ''}${big ? ' big' : ''}`} role="group" aria-label="Score">
+    <span className="score-bar-label">SCORE</span>
+    <span className="score-bar-value" key={burst}>
+      <strong aria-live="polite">{score}</strong>
+      {celebration && SPARK_ANGLES.map((angle, i) => <i key={angle} className="score-spark" aria-hidden="true"
+        style={{ '--angle': `${angle}deg`, '--reach': `${(big ? 46 : 34) + (i % 2) * 10}px`,
+          '--spark': SPARK_COLORS[i % SPARK_COLORS.length] } as CSSProperties} />)}
+    </span>
+    {celebration && <span className="score-chip" key={`chip${burst}`} aria-live="polite">
+      {big ? '★ New best!' : `${celebration.event.value} points!`}</span>}
+  </div>;
+}
+
+/** Score moments from games the toy plays by itself; app games celebrate in their ScoreBar instead. */
 function Celebration() {
   const celebration = useCelebration();
-  return celebration && <div className="celebration" role="status">✦ {celebration.kind === 'milestone' ? '100 points!' : 'A new best!'} ✦</div>;
+  if (!celebration || celebration.event.source !== 'toy') return null;
+  const { event } = celebration;
+  return <div className="celebration" role="status">
+    {celebration.kind === 'milestone' ? `${event.value} points on Jimmy!` : `New high score on Jimmy: ${event.score}!`}</div>;
 }
 
 const root = document.getElementById('root');

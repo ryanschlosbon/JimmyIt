@@ -3,6 +3,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   // Game views are React Native components shared with the phone app; react-native-web draws them in the browser.
   resolve: { alias: { 'react-native': 'react-native-web' } },
+  // react-native-web's Animated reads Node's `global`; browsers call it globalThis.
+  define: { global: 'globalThis' },
   build: { outDir: 'dist' },
   server: {
     host: '127.0.0.1',
