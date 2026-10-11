@@ -14,7 +14,7 @@ export const APP_ARTWORK: Readonly<{
   introEnd: require('../assets/intro-end.png'),
   jimmyFace: null,
   jimmyHero: null,
-  bannerArt: { timed: null, tapQuest: null, drawing: null, shapes: null },
+  bannerArt: { timed: null, tapQuest: null, drawing: null, shapes: null, buttonHero: null, knobQuest: null },
 };
 
 // Match the backgrounds in the supplied compositions so portrait screens have no letterbox edges.

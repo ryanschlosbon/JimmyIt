@@ -15,6 +15,7 @@ describe('game registry', () => {
     expect(ids).toEqual([
       'drawing-with-jimmy', 'shape-challenge', 'timed-motor-practice',
       'tap-quest-precision', 'tap-quest-trace', 'tap-quest-memory', 'tap-quest-calm', 'shape-recognition',
+      'button-hero-normal', 'knob-quest',
       'fidget-free-play', 'fidget-spin-count',
     ]);
     expect(GAME_CATALOG.find(game => game.id === 'tap-quest-memory')).toMatchObject({ needsToy: false, title: 'Tap Quest: Memory' });

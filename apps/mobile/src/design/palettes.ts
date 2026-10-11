@@ -16,7 +16,7 @@ export interface BannerColors {
 }
 
 /** Banner color names. A new game picks one, or adds one here and to every palette. */
-export type BannerColorName = 'mint' | 'lilac' | 'peach' | 'butter' | 'sky' | 'rose';
+export type BannerColorName = 'mint' | 'lilac' | 'peach' | 'butter' | 'sky' | 'rose' | 'rhythm' | 'quest';
 
 export interface Palette {
   // Surfaces
@@ -96,6 +96,8 @@ const classicLight: Palette = {
     butter: { background: '#FFF6DB', border: '#F8E4A8', accent: '#F5C84C', shadow: '#F0B92E', chip: '#FFFFFF' },
     sky: { background: '#E7F3FD', border: '#CCE4F8', accent: '#6FB5EE', shadow: '#6FB5EE', chip: '#FFFFFF' },
     rose: { background: '#FCEAF3', border: '#F4CFE2', accent: '#E58BBE', shadow: '#E58BBE', chip: '#FFFFFF' },
+    rhythm: { background: '#FFF0E9', border: '#F7D5C5', accent: '#F19266', shadow: '#DC7756', chip: '#FFFFFF' },
+    quest: { background: '#EAF5EF', border: '#C5E4D2', accent: '#77C59B', shadow: '#50A77C', chip: '#FFFFFF' },
   },
 };
 
@@ -115,6 +117,8 @@ const classicDark: Palette = {
     butter: { background: '#43402F', border: '#5C573D', accent: '#F5C84C', shadow: '#C99B21', chip: '#183153' },
     sky: { background: '#1F3A5C', border: '#2E5280', accent: '#8CC6F2', shadow: '#4C93D0', chip: '#183153' },
     rose: { background: '#45304A', border: '#5E4166', accent: '#EDA3CC', shadow: '#D16EA6', chip: '#183153' },
+    rhythm: { background: '#49343D', border: '#704954', accent: '#F0A17D', shadow: '#CE765C', chip: '#183153' },
+    quest: { background: '#21453F', border: '#376158', accent: '#8AD2AA', shadow: '#53A879', chip: '#183153' },
   },
 };
 
@@ -133,6 +137,8 @@ const calmLight: Palette = {
     lilac: { ...classicLight.banners.lilac, accent: '#C4B2F0' },
     peach: { ...classicLight.banners.peach, accent: '#F0A9A2' },
     butter: { ...classicLight.banners.butter, accent: '#F3D88E' },
+    rhythm: { ...classicLight.banners.rhythm, accent: '#EDAF90' },
+    quest: { ...classicLight.banners.quest, accent: '#9BD4AE' },
   },
 };
 
@@ -142,6 +148,11 @@ const calmDark: Palette = {
   bubbles: ['#E0918A', '#E5C976', '#7FCDBF'],
   bubbleOpacity: 0.2,
   dot: '#E0918A', dotActive: '#4FB7AA',
+  banners: {
+    ...classicDark.banners,
+    rhythm: { ...classicDark.banners.rhythm, accent: '#EAB197' },
+    quest: { ...classicDark.banners.quest, accent: '#A5D8B9' },
+  },
 };
 
 /** Every look the app can wear. The first one is the default. */
