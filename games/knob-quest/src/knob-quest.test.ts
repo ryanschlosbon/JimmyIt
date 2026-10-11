@@ -16,6 +16,33 @@ const holey: KnobQuestLevel = {
   holes: [{ x: 10, y: 26, width: 6, height: 4 }],
 };
 const holeWidth = (route: KnobQuestLevel) => route.holes.reduce((total, hole) => total + hole.width, 0);
+// A tall, open level, to see how high Jimmy can climb without bumping the top.
+const tall: KnobQuestLevel = {
+  width: 400, height: 100, start: { x: 2, y: 92 },
+  platforms: [{ x: 0, y: 96, width: 400, height: 4 }],
+  holes: [],
+  goal: { x: 395, y: 0, width: 3, height: 3 },
+};
+const lift = (value: number) => ({ type: 'axis' as const, axis: 'vertical' as const, value: -value });
+
+/** Holds the lift at `strength` from the floor of `tall` until Jimmy lands again; returns how high he climbed. */
+async function jump(strength: number, { glide = true } = {}) {
+  const h = await createGameTestHarness(createKnobQuestGame(tall), { toy: false });
+  h.run.submit(lift(strength));
+  let top = tall.start.y;
+  let airborneMs = 0;
+  let lowestBoost = 1;
+  for (let t = 0; t < 10_000; t += 40) {
+    h.advance(40);
+    const state = h.run.getState();
+    top = Math.min(top, state.y);
+    lowestBoost = Math.min(lowestBoost, state.boost);
+    if (!glide && state.verticalVelocity > 0) h.run.submit(lift(0));
+    if (!state.grounded) airborneMs += 40;
+    else if (airborneMs > 0) break;
+  }
+  return { climb: tall.start.y - top, airborneMs, lowestBoost, landed: h.run.getState() };
+}
 
 describe('Knob Quest', () => {
   it('generates repeatable routes; holes grow from none (easy) to small (normal) to big (hard)', () => {
@@ -64,6 +91,50 @@ describe('Knob Quest', () => {
     const peak = easy.run.getState().y;
     easy.advance(500);
     expect(easy.run.getState().y).toBeGreaterThan(peak);
+  });
+
+  it('spends boost to lift, so holding the lift forever still brings Jimmy back down', async () => {
+    const { climb, lowestBoost, landed } = await jump(1);
+    expect(lowestBoost).toBe(0);
+    expect(climb).toBeGreaterThan(30);
+    expect(climb).toBeLessThan(45);
+    // Landing fills the boost again.
+    expect(landed).toMatchObject({ grounded: true, boost: 1, y: tall.start.y });
+  });
+
+  it('jumps higher the harder the knob is turned', async () => {
+    const strong = await jump(1);
+    const medium = await jump(0.7);
+    const gentle = await jump(0.5);
+    expect(strong.climb).toBeGreaterThan(medium.climb);
+    expect(medium.climb).toBeGreaterThan(gentle.climb);
+    expect(gentle.climb).toBeGreaterThan(5);
+  });
+
+  it('falls faster with no lift on the way down, and glides with a fast one', async () => {
+    const dropped = await jump(1, { glide: false });
+    const glided = await jump(1);
+    expect(glided.climb).toBeCloseTo(dropped.climb, 0);
+    expect(glided.airborneMs).toBeGreaterThan(dropped.airborneMs + 600);
+  });
+
+  it('keeps every platform within a strong jump of the floor below, and of the platform before it', async () => {
+    let highestFromFloor = 0;
+    let highestStep = 0;
+    for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+      for (let seed = 1; seed < 40; seed++) {
+        const route = createKnobQuestLevel(seed, difficulty);
+        const floorTop = route.height - 4;
+        const floating = route.platforms.filter((platform) => platform.y < floorTop);
+        floating.forEach((platform, index) => {
+          highestFromFloor = Math.max(highestFromFloor, floorTop - platform.y);
+          const before = floating[index - 1];
+          if (before) highestStep = Math.max(highestStep, before.y - platform.y);
+        });
+      }
+    }
+    expect((await jump(0.8)).climb).toBeGreaterThan(highestFromFloor + 1);
+    expect((await jump(0.55)).climb).toBeGreaterThan(highestStep + 1);
   });
 
   it('pays once for each platform Jimmy lands on, and records the takeoff and landing', async () => {

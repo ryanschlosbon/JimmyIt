@@ -122,13 +122,14 @@ export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, 
         borderWidth: 2, borderColor: theme.border, overflow: 'hidden' }}>
       {state && area.width > 0 && <World state={state} theme={theme} box={box} sx={sx} sy={sy} camera={camera}
         player={player} color={colorFor(state.lives)} />}
+      {state && area.width > 0 && <BoostBar boost={state.boost} grounded={state.grounded} theme={theme} />}
       {!state && <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, gap: 12 }}>
         {player({ size: 72, color: theme.mint })}
         <Text style={{ color: theme.text, fontSize: 20, fontWeight: 'bold', textAlign: 'center' }}>
           Roll Jimmy to the flag!
         </Text>
         <Text style={{ color: theme.secondary, fontSize: 17, textAlign: 'center' }}>
-          Spin the spinner to roll. Turn the knob to float up. Faster turns push harder!
+          Spin the spinner to roll. Turn the knob to jump, faster for higher. Land to fill your boost!
         </Text>
       </View>}
     </View>
@@ -139,7 +140,7 @@ export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, 
         Jimmy needs a little rest! You scored {state.score} points. Try a new route?
       </Text> : <Text style={{ color: theme.secondary, fontSize: 16 }}>
         {state.checkpointReached ? 'Checkpoint reached! Jimmy will come back here.'
-          : 'Spin to roll, turn the knob to float up. Land on platforms for points.'}
+          : 'Spin to roll, turn the knob to jump. Land to fill your boost, and on platforms for points.'}
       </Text>}
     </View>}
     {/* Touch controls do the same as the toy, for playing without Jimmy. */}
@@ -147,6 +148,27 @@ export function KnobQuestView({ state, status, difficulty, theme, renderPlayer, 
       {control('←', 'Roll left', 'horizontal', -1)}{control('→', 'Roll right', 'horizontal', 1)}
       {control('↑', 'Float up', 'vertical', -1)}{control('↓', 'Drop', 'vertical', 1)}
     </View>}
+  </View>;
+}
+
+/** How much lift Jimmy has left before he needs to land. It fills the moment he stands on something. */
+function BoostBar({ boost, grounded, theme }: {
+  readonly boost: number; readonly grounded: boolean; readonly theme: QuestTheme;
+}) {
+  const percent = Math.round(Math.max(0, Math.min(1, boost)) * 100);
+  return <View pointerEvents="none" accessibilityRole="progressbar" accessibilityLabel="Boost"
+    accessibilityValue={{ min: 0, max: 100, now: percent }}
+    style={{ position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingVertical: 6, paddingHorizontal: 10, borderRadius: 14, backgroundColor: theme.surface,
+      borderWidth: 1.5, borderColor: theme.border }}>
+    <Text style={{ color: theme.text, fontSize: 14, fontWeight: 'bold' }}>Boost</Text>
+    <View style={{ width: 96, height: 12, borderRadius: 6, backgroundColor: theme.raised, overflow: 'hidden',
+      borderWidth: 1, borderColor: theme.border }}>
+      <View style={{ width: `${percent}%`, height: '100%', borderRadius: 6, backgroundColor: theme.mint }} />
+    </View>
+    {percent === 0 && !grounded && <Text style={{ color: theme.secondary, fontSize: 13, fontWeight: 'bold' }}>
+      Land to refill!
+    </Text>}
   </View>;
 }
 

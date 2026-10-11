@@ -6,6 +6,16 @@ when he takes off. One control rolls him left or right; the other lifts him
 against gravity. On the toy, the spinner rolls and the knob (the rotary encoder,
 24 clicks a turn) lifts, and turning faster pushes harder. Every run generates a new, repeatable route from a seed.
 
+Lifting spends **boost**, shown as a bar in the corner of the play area. A full
+boost at full speed climbs about half the level's height; slower turning climbs
+less on the same boost. When it runs out Jimmy can't rise any more, and
+standing on anything (floor or platform) fills it again at once, so the way
+forward is hopping from platform to platform. On the way down, gravity is
+strong if the knob is still and weak if it is turning fast, so turning softens a
+landing into a glide even with no boost left. Every floating platform is within
+a strong jump of the floor below it, and each is at most a small step above the
+one before.
+
 Easy has a solid floor. Normal cuts small holes in the floor under some
 platforms; hard cuts big ones plus a stretch with no floor at all, where the
 platforms are the way across. Normal and hard also drop a few timed fireballs.
