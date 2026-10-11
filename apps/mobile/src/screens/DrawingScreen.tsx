@@ -1,33 +1,24 @@
 import { useState } from 'react';
 import { Text, View, useWindowDimensions } from 'react-native';
-import { Body } from '../components/Controls';
+import { Body, Button } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { Jimmy } from '../components/Jimmy';
 import { Tappable } from '../components/Tappable';
 import { DrawingCanvas } from '../components/DrawingCanvas';
 import { ART, ART_BRUSH_SIZES, FONTS, RADIUS, SIZE, SPACE, TYPE } from '../design/tokens';
+import { getArtLayout } from '../art-layout';
 import type { Theme } from '../theme';
 import type { Activity } from '../games';
 import type { DrawingAction, Stroke } from '@jimmyit/game-drawing';
 
-export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving }: {
+export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving, onAllGames }: {
   readonly theme: Theme; readonly activity: Activity; readonly strokes: readonly Stroke[];
   readonly dispatch: (action: DrawingAction) => void; readonly finish: () => void; readonly saving: boolean;
+  readonly onAllGames: () => void;
 }) {
   const { width, height } = useWindowDimensions();
   const compact = width < SIZE.compactWidth;
-  const workspaceHeight = Math.max(ART.canvasMinHeight + ART.titleHeight + ART.actionHeight + SPACE.sm * 2,
-    height - ART.viewportChromeHeight);
-  const canvasHeight = workspaceHeight - ART.titleHeight - ART.actionHeight - SPACE.sm * 2;
-  const toolPanelHeight = (count: number, columns: number) => {
-    const rows = Math.ceil(count / columns);
-    return rows * SIZE.touchTarget + (rows - 1) * SPACE.sm + SPACE.sm * 2 + ART.borderWidth * 2;
-  };
-  const twoColumnHeight = toolPanelHeight(theme.art.colors.length, 2)
-    + toolPanelHeight(ART_BRUSH_SIZES.length, 2) + SPACE.sm;
-  const toolColumns = compact ? 4 : workspaceHeight >= twoColumnHeight ? 2 : 3;
-  const sidebarWidth = toolColumns * SIZE.touchTarget + (toolColumns - 1) * SPACE.sm
-    + SPACE.sm * 2 + ART.borderWidth * 2;
+  const { canvasHeight, sidebarWidth } = getArtLayout(height, compact, theme.art.colors.length, ART_BRUSH_SIZES.length);
   const [colorName, setColorName] = useState('Ocean blue');
   const [brushSize, setBrushSize] = useState<number>(12);
   const color = theme.art.colors.find(swatch => swatch.name === colorName)?.color ?? theme.ink;
@@ -38,6 +29,8 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
   } as const;
   const tools = <View accessibilityLabel="Art colors and brush sizes"
     style={{ width: compact ? '100%' : sidebarWidth, gap: SPACE.sm }}>
+    <Button theme={theme} label="All games" icon="chevronLeft" compact onPress={onAllGames}
+      style={{ width: '100%', paddingHorizontal: SPACE.xs }} />
     <View style={panelStyle}>
       <View accessibilityRole="radiogroup" accessibilityLabel="Drawing color"
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'center' }}>

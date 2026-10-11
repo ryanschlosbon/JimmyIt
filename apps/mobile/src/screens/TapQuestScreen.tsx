@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, View, useWindowDimensions, type GestureResponderEvent, type LayoutRectangle } from 'react-native';
-import Svg, { Circle, Polyline, Text as SvgText } from 'react-native-svg';
+import { AppState, Text, View, useWindowDimensions, type GestureResponderEvent, type LayoutRectangle } from 'react-native';
+import Svg, { Circle, Polyline } from 'react-native-svg';
 import type { GameRunControls } from '@jimmyit/app-kit';
 import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
-import { Body, Button, Eyebrow, Heading, ProgressBar } from '../components/Controls';
+import { Body, Button, ProgressBar } from '../components/Controls';
+import { ActivityHeader } from '../components/ActivityHeader';
 import { Icon } from '../components/Icon';
 import { TAP_QUEST_MODES } from '../games';
+import { FONTS, RADIUS, SIZE, SPACE, TAP_QUEST_VIEW, TYPE } from '../design/tokens';
 import type { Theme } from '../theme';
 
 /** The bits of the toy this screen cares about: the stylus lives in Jimmy. */
@@ -23,7 +25,7 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
   readonly autoStart: boolean; readonly onAutoStarted: () => void;
 }) {
   const { width } = useWindowDimensions();
-  const compact = width < 680;
+  const compact = width < SIZE.compactWidth;
   const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
   const [stylusPaused, setStylusPaused] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -78,14 +80,11 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
   const recall = state?.memoryPhase === 'recall';
   const windowMs = state ? state.settings.targetDurationMs + (state.feedback.generousTiming ? state.settings.timingWindowMs : 0) : 1;
 
-  return <View style={{ gap: 24 }}>
-    <View style={{ gap: 8 }}><Eyebrow theme={theme}>Stylus practice</Eyebrow>
-      <Heading theme={theme} level={1} size={compact ? 36 : 44}>Tap Quest</Heading>
-      <Body theme={theme}>Friendly circles and paths for your stylus. Near misses still count.</Body>
-    </View>
+  return <View style={{ gap: SPACE.xl }}>
+    <ActivityHeader theme={theme} activity="tapQuest" title="Tap Quest" />
 
-    {toy.connected && <View style={{ backgroundColor: stylusInJimmy ? theme.softCoral : theme.softMint, borderRadius: 18,
-      padding: 18, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+    {toy.connected && <View style={{ backgroundColor: stylusInJimmy ? theme.softCoral : theme.softMint, borderRadius: RADIUS.md,
+      padding: SPACE.lg, flexDirection: 'row', gap: SPACE.md, alignItems: 'center' }}>
       <Icon name="toy" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {stylusPaused ? 'The stylus is back in Jimmy, so we paused. Take it out and tap Resume.'
@@ -95,16 +94,16 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
       </Body></View>
     </View>}
 
-    {!active && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+    {!active && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.md }}>
       {TAP_QUEST_MODES.map(option => <Button key={option.mode} theme={theme} label={option.title}
         selected={mode === option.mode} color={mode === option.mode ? theme.mint : undefined}
         onPress={() => onMode(option.mode)} disabled={saveStatus === 'saving'} compact />)}
     </View>}
     {!active && <Body theme={theme} small>{TAP_QUEST_MODES.find(option => option.mode === mode)?.caption}</Body>}
 
-    <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5, borderRadius: 26,
-      padding: compact ? 14 : 22, gap: 16, alignItems: 'center' }}>
-      {state && active && <View style={{ width: '100%', maxWidth: 560, gap: 10 }}>
+    <View style={{ backgroundColor: theme.surface, borderColor: theme.border, borderWidth: TAP_QUEST_VIEW.borderWidth,
+      borderRadius: RADIUS.lg, padding: compact ? SPACE.md : SPACE.xl, gap: SPACE.lg, alignItems: 'center' }}>
+      {state && active && <View style={{ width: '100%', maxWidth: TAP_QUEST_VIEW.boardMaxWidth, gap: SPACE.sm }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Body theme={theme} small>{state.mode === 'calm' ? `${state.matchedCount} circles`
             : `${Math.min(state.targetIndex + 1, state.targetCount)} of ${state.targetCount}`}</Body>
@@ -122,27 +121,32 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
         onStartShouldSetResponder={() => status === 'running'} onMoveShouldSetResponder={() => status === 'running'}
         onResponderGrant={event => touch(event, 'down')} onResponderMove={event => touch(event, 'move')}
         onResponderRelease={event => touch(event, 'up')}
-        style={{ width: '100%', maxWidth: 560, aspectRatio: 1, borderRadius: 22, backgroundColor: theme.raised,
+        style={{ width: '100%', maxWidth: TAP_QUEST_VIEW.boardMaxWidth, aspectRatio: 1,
+          borderRadius: RADIUS.lg, backgroundColor: theme.raised,
           opacity: status === 'paused' ? .5 : 1, overflow: 'hidden' }}>
         <Svg width={size} height={layout.height} pointerEvents="none">
           {state && active && state.mode === 'trace' && <>
             <Polyline points={state.path.map(point => `${scale(point.x)},${scale(point.y)}`).join(' ')}
               fill="none" stroke={theme.teal} strokeWidth={scale(state.settings.targetRadius) * 1.4}
               strokeLinecap="round" strokeLinejoin="round" opacity={.35} />
-            {state.path.map((point, i) => <Circle key={i} cx={scale(point.x)} cy={scale(point.y)} r={6} fill={theme.teal} />)}
+            {state.path.map((point, i) => <Circle key={i} cx={scale(point.x)} cy={scale(point.y)}
+              r={TAP_QUEST_VIEW.pathDotSize} fill={theme.teal} />)}
           </>}
           {state && active && state.mode === 'memory' && state.choices.map((choice, i) => <Circle key={i}
             cx={scale(choice.x)} cy={scale(choice.y)} r={scale(choice.radius)} fill={theme.surface}
-            stroke={theme.purple} strokeWidth={3} />)}
+            stroke={theme.purple} strokeWidth={TAP_QUEST_VIEW.targetBorderWidth} />)}
           {state?.target && active && <Circle cx={scale(state.target.x)} cy={scale(state.target.y)}
             r={scale(state.target.radius)} fill={state.mode === 'memory' ? theme.purple : theme.coral}
-            stroke="#203858" strokeWidth={3} />}
-          {!active && <SvgText x={size / 2} y={layout.height / 2} fontSize={22} fill={theme.secondary}
-            textAnchor="middle">{status === 'finished' ? 'Great tapping!' : 'Pick a mode, then Start'}</SvgText>}
+            stroke={theme.navy} strokeWidth={TAP_QUEST_VIEW.targetBorderWidth} />}
         </Svg>
+        {!active && <View pointerEvents="none" style={{ position: 'absolute', inset: 0,
+          alignItems: 'center', justifyContent: 'center', padding: SPACE.xl }}>
+          <Text style={{ fontFamily: FONTS.body, fontSize: TYPE.body, color: theme.secondary, textAlign: 'center' }}>
+            {status === 'finished' ? 'Great tapping!' : 'Pick a mode, then Start'}</Text>
+        </View>}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+      <View style={{ flexDirection: 'row', gap: SPACE.md, flexWrap: 'wrap', justifyContent: 'center' }}>
         {!active && <Button theme={theme} label={starting ? 'Making pattern…' : status === 'finished' ? 'Play again' : 'Start'}
           icon="sparkle" color={theme.yellow} onPress={startPattern}
           disabled={starting || saveStatus === 'saving' || stylusInJimmy} />}

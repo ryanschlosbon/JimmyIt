@@ -237,7 +237,8 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
         {isActivity(screen) && <Button theme={theme} label="All games" icon="chevronLeft" compact
           onPress={() => navigate('home')} style={{ alignSelf: 'flex-start', marginBottom: 18 }} />}
         {screen === 'draw' && <DrawingScreen theme={theme} activity={activity} strokes={drafts[activity]}
-          dispatch={dispatch} finish={finish} saving={drawingRuns[activity].saveStatus === 'saving'} />}
+          dispatch={dispatch} finish={finish} saving={drawingRuns[activity].saveStatus === 'saving'}
+          onAllGames={() => navigate('home')} />}
         {screen === 'rewards' && <RewardsScreen theme={theme} progress={state.progress} />}
         {screen === 'settings' && <SettingsScreen theme={theme} state={state}
           replayIntro={() => { navigate('home'); setIntroDone(false); }} />}

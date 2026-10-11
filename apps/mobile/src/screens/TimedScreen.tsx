@@ -2,9 +2,11 @@ import { useEffect } from 'react';
 import { AppState, Text, View, useWindowDimensions } from 'react-native';
 import type { GameRunControls } from '@jimmyit/app-kit';
 import type { TimedPracticeState } from '@jimmyit/game-timed-practice';
-import { Body, Button, Eyebrow, Heading, ProgressBar } from '../components/Controls';
+import { Body, Button, Heading, ProgressBar } from '../components/Controls';
+import { ActivityHeader } from '../components/ActivityHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { TIMED_PRACTICE_SECONDS } from '../games';
+import { FONTS } from '../design/tokens';
 import type { Theme } from '../theme';
 
 /** The simulated toy's controls this screen can press (development and web previews only). */
@@ -47,10 +49,8 @@ export function TimedScreen({ theme, timed, onStart, durationS, onDuration, conn
     { move: 'screw', label: 'Turn screw', icon: 'sparkle', color: theme.yellow, act: toy => toy.turnScrew(1) },
   ];
   return <View style={{ gap: 26 }}>
-    <View style={{ gap: 8 }}><Eyebrow theme={theme}>Move & discover</Eyebrow>
-      <Heading theme={theme} level={1} size={compact ? 36 : 44}>Timed Run</Heading>
-      <Body theme={theme}>Go at your own pace. Every move counts.</Body>
-    </View>
+    <ActivityHeader theme={theme} activity="timed" title="Timed Run" eyebrow="Move & discover"
+      description="Go at your own pace. Every move counts." />
     <View style={{ backgroundColor: theme.softMint, borderRadius: 18, padding: 20, flexDirection: 'row', gap: 12 }}>
       <Icon name="bluetooth" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
@@ -66,7 +66,7 @@ export function TimedScreen({ theme, timed, onStart, durationS, onDuration, conn
           disabled={active || saving} onPress={() => onDuration(seconds)} />)}
       </View>
       <Text accessibilityLabel={`${Math.ceil(remainingMs / 1000)} seconds remaining`}
-        style={{ fontFamily: 'Baloo', fontSize: compact ? 76 : 96, lineHeight: compact ? 85 : 105, color: theme.text }}>
+        style={{ fontFamily: FONTS.display, fontSize: compact ? 76 : 96, lineHeight: compact ? 85 : 105, color: theme.text }}>
         {Math.ceil(remainingMs / 1000)}<Text style={{ fontSize: 26 }}> sec</Text>
       </Text>
       <View style={{ width: '100%', maxWidth: 620 }}><ProgressBar theme={theme} value={status === 'idle' ? 0
@@ -93,7 +93,7 @@ export function TimedScreen({ theme, timed, onStart, durationS, onDuration, conn
       {controls.map(control => <View key={control.move} style={{ flex: 1, borderRadius: 23,
         padding: 24, backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5, gap: 18,
         alignItems: 'center' }}>
-        <Text style={{ fontFamily: 'Baloo', fontSize: 44, color: theme.text }}>{moves?.[control.move] ?? 0}</Text>
+        <Text style={{ fontFamily: FONTS.display, fontSize: 44, color: theme.text }}>{moves?.[control.move] ?? 0}</Text>
         {virtualToy ? <Button theme={theme} icon={control.icon} label={control.label} color={control.color}
           onPress={() => control.act(virtualToy)} disabled={status !== 'running'}
           style={{ width: '100%', minHeight: 78 }} />

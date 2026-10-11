@@ -67,6 +67,14 @@ export interface Palette {
   readonly dot: string;
   readonly dotActive: string;
   readonly banners: Readonly<Record<BannerColorName, BannerColors>>;
+  /** Inner game headers, adapted from the supplied bubble banners. */
+  readonly activityHeaders: {
+    readonly timed: { readonly background: string; readonly text: string };
+    readonly tapQuest: { readonly background: string; readonly text: string };
+    readonly bubble: string;
+    readonly face: string;
+    readonly shadow: string;
+  };
   /** Paint stays true to its swatch in every appearance; editor surfaces follow the theme. */
   readonly art: {
     readonly colors: readonly { readonly name: string; readonly color: string }[];
@@ -98,6 +106,11 @@ const classicLight: Palette = {
   bubbleOpacity: 1,
   score: { pill: '#7A0B5A', pillText: '#FFFFFF', value: '#7A0B5A' },
   dot: '#EF6B62', dotActive: '#18A999',
+  activityHeaders: {
+    timed: { background: '#F5C84C', text: '#183153' },
+    tapQuest: { background: '#18A999', text: '#000000' },
+    bubble: '#FFFFFF', face: '#7A0B5A', shadow: '#DDE4E4',
+  },
   art: {
     colors: [
       { name: 'Forest green', color: '#257A0A' }, { name: 'Purple', color: '#8050BC' },
@@ -147,6 +160,11 @@ const calmLight: Palette = {
   nav: { play: '#7FCDBF', rewards: '#F0A9A2', settings: '#F3D88E' },
   bubbles: ['#F6C7C1', '#F7E3AE', '#BFE8DB'],
   dot: '#F0A9A2', dotActive: '#4FB7AA',
+  activityHeaders: {
+    ...classicLight.activityHeaders,
+    timed: { background: '#F3D88E', text: '#183153' },
+    tapQuest: { background: '#7FCDBF', text: '#183153' },
+  },
   score: { pill: '#8E5379', pillText: '#FFFFFF', value: '#8E5379' },
   banners: {
     ...classicLight.banners,
@@ -162,6 +180,7 @@ const calmDark: Palette = {
   nav: { play: '#4FB7AA', rewards: '#E0918A', settings: '#E5C976' },
   bubbles: ['#E0918A', '#E5C976', '#7FCDBF'],
   bubbleOpacity: 0.2,
+  activityHeaders: calmLight.activityHeaders,
   dot: '#E0918A', dotActive: '#4FB7AA',
 };
 

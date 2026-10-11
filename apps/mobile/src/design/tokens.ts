@@ -64,6 +64,16 @@ export const ART = {
 /** Presets, in drawing-coordinate units, from a fine point to a broad brush. */
 export const ART_BRUSH_SIZES = [4, 8, 12, 18, 24, 30, 40, 48] as const;
 
+/** Compact inner-game versions of the supplied title banners. */
+export const ACTIVITY_HEADER = {
+  minHeight: 184, phoneMinHeight: 148, faceSize: 104, phoneFaceSize: 64,
+  bubbleSize: 160, smallBubbleSize: 112, shadowHeight: 8,
+} as const;
+
+export const TAP_QUEST_VIEW = {
+  boardMaxWidth: 560, borderWidth: 2, targetBorderWidth: 3, pathDotSize: 6,
+} as const;
+
 /** Settings proportions follow the grown-ups' area reference. */
 export const SETTINGS = {
   maxWidth: 1440, columnBreakpoint: 850,
