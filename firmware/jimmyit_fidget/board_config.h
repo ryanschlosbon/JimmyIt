@@ -6,7 +6,7 @@
 
 #define JIMMYIT_FIRMWARE_MAJOR 0
 #define JIMMYIT_FIRMWARE_MINOR 3
-#define JIMMYIT_FIRMWARE_PATCH 0
+#define JIMMYIT_FIRMWARE_PATCH 1
 
 // Breadboard: one push button from D0 to GND acts as the top clicker.
 #define JIMMYIT_HAS_BREADBOARD_BUTTON 1

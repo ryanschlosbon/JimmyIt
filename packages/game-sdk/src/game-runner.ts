@@ -27,7 +27,7 @@ export interface StartGameOptions {
   readonly clock?: Clock;
   readonly scheduler?: Scheduler;
   readonly tickMs?: number;
-  /** Take over the toy's OLED during the game and show the result. Default true. */
+  /** Take over the toy's OLED during the game (ending any toy game), then hand it back. Default true. */
   readonly useFidgetDisplay?: boolean;
   /** Toy commands are fire-and-forget during play; failures land here. */
   readonly onDeviceError?: (error: unknown) => void;
@@ -222,7 +222,13 @@ export function startGame<TState, TAction = never>(
     logic.onFinish?.();
     checkScore();  // e.g. partial credit added in onFinish
     if (tracker) publish(tracker.end());
-    save().catch(() => undefined); // failure is visible as saveStatus 'failed'; retrySave() tries again
+    // Failure is visible as saveStatus 'failed'; retrySave() tries again. Either way, once
+    // the score is on the toy, hand it back so the child can start Free Play while connected.
+    save()
+      .catch(() => undefined)
+      .then(() => {
+        if (useDisplay) toDevice(device?.setMode('standalone'));
+      });
   }
 
   if (useDisplay) {

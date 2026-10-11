@@ -82,6 +82,10 @@ uint32_t resultScore = 0;
 bool resultNewBest = false;
 AppDisplay appDisplay = {};
 const char* noticeText = "";
+// The app game that just ended (from its gameEnd moment), shown when the app hands the toy back.
+bool appResultPending = false;
+uint32_t appResultScore = 0;
+bool appResultNewBest = false;
 
 ConnectionApproval approval;
 ApprovedApps approvedApps;
@@ -260,11 +264,21 @@ void enterAppMode(uint32_t nowMs) {
   }
   fidgetMode = FidgetMode::kApp;
   appDisplay = AppDisplay{};
+  appResultPending = false;
   goTo(Screen::App, nowMs);
 }
 
+// After an app game the toy shows its score like one of its own games, then Free
+// Play is ready again while the app stays connected.
 void enterStandaloneMode(uint32_t nowMs) {
   fidgetMode = FidgetMode::kStandalone;
+  if (appResultPending) {
+    appResultPending = false;
+    resultScore = appResultScore;
+    resultNewBest = appResultNewBest;
+    goTo(Screen::Result, nowMs);
+    return;
+  }
   armGame(nowMs);
 }
 
@@ -308,6 +322,11 @@ void handleCommand(const CommandBytes& bytes, uint32_t nowMs) {
       // An app game's moment: same animation and haptic as the toy's own games.
       celebrate(command.kind, command.score, command.value, nowMs,
                 command.kind == ScoreEventKind::kGameEnd && command.score > command.value);
+      if (command.kind == ScoreEventKind::kGameEnd && fidgetMode == FidgetMode::kApp) {
+        appResultPending = command.score > 0;  // no "0 points" screen, as for the toy's games
+        appResultScore = command.score;
+        appResultNewBest = command.score > command.value;
+      }
       break;
     case CommandOpcode::kShowText:
       if (!appOwnsScreen) break;
