@@ -82,3 +82,24 @@ describe('score events from app games', () => {
     expect(h.fidget.scoreEvents.filter((e) => e.kind === 'points').map((e) => e.score)).toEqual([40, 80]);
   });
 });
+
+describe('the toy during an app game', () => {
+  it('takes the toy for the game and hands it back when the game ends', async () => {
+    const { h, events } = await withBest(0);
+    expect(h.fidget.mode).toBe('app');
+    h.fidget.tap('clicker');
+    await h.playToEnd();
+    // Handed back once the score is on the toy, which is a moment after the result.
+    expect(h.fidget.display.score?.score).toBe(40);
+    await vi.waitFor(() => expect(h.fidget.mode).toBe('standalone'));
+    // gameEnd reaches the toy before the hand-back, so the toy can show the score.
+    expect(h.fidget.scoreEvents.at(-1)?.kind).toBe('gameEnd');
+    expect(events.at(-1)?.kind).toBe('gameEnd');
+  });
+
+  it('hands the toy back when the child quits early', async () => {
+    const { h } = await withBest(0);
+    await h.run.quit();
+    await vi.waitFor(() => expect(h.fidget.mode).toBe('standalone'));
+  });
+});
