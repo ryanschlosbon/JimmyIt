@@ -31,6 +31,8 @@ void uiReady(const char* gameTitle, bool showMenuHint, bool linked);
 // runs down); negative while play is going on ("KEEP PLAYING!").
 void uiPoints(uint32_t points, bool linked, float graceRemaining);
 // The final score with sparkles (and "NEW BEST!"); redraw it every frame.
+// The boot animation (src/boot_animation.cpp): the wordmark, Jimmy rolling in and away with his stripes.
+void uiBoot(uint32_t elapsedMs);
 void uiResult(uint32_t points, bool newBest, uint32_t elapsedMs);
 void uiApp(const AppDisplay& app);
 // "CONNECT TO <NAME>?" with the menu-key answers (or "CLICK = YES" without them).

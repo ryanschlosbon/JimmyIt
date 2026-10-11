@@ -5,15 +5,19 @@
 #include <initializer_list>
 
 #include "basic_modes.h"
+#include "boot_animation.h"
 #include "battery_level.h"
 #include "celebration.h"
 #include "connection_approval.h"
 #include "fidget_protocol.h"
 #include "haptic_feedback.h"
 #include "input_helpers.h"
+#include "jimmy_face.h"
+#include "raster.h"
 #include "result_animation.h"
 #include "score_log.h"
 #include "score_events.h"
+#include "wordmark_bitmap.h"
 
 static int failures = 0;
 #define CHECK_MSG(cond, msg)                                         \
@@ -597,6 +601,84 @@ static void testResultAnimation() {
   CHECK(landed + A::kBurstMs + 1000 <= A::kTotalMs);  // a moment to enjoy it before the ready screen
 }
 
+static void testRaster() {
+  uint8_t buffer[Raster::kBytes];
+  Raster r(buffer);
+  r.clear();
+  r.pixel(5, 9, true);
+  CHECK(r.get(5, 9) && buffer[5 + 1 * Raster::kWidth] == 0x02);  // SSD1306 layout: page 1, bit 1
+  r.pixel(-1, 0, true);
+  r.pixel(128, 63, true);
+  r.pixel(0, 64, true);  // off screen: ignored, nothing else touched
+  int lit = 0;
+  for (size_t i = 0; i < Raster::kBytes; i++) lit += __builtin_popcount(buffer[i]);
+  CHECK(lit == 1);
+  r.clear();
+  r.fillPill(10, 20, 30, 12, true);
+  CHECK(r.get(25, 20) && r.get(25, 31) && !r.get(25, 32) && r.get(10, 26) && !r.get(10, 20));  // rounded corners
+  r.clear();
+  r.fillCircle(64, 32, 10, true);
+  CHECK(r.get(64, 22) && r.get(74, 32) && !r.get(73, 23) && !r.get(64, 43));
+  static const uint8_t two[] = {0xA0};  // 1 0 1
+  r.clear();
+  r.bitmap(-1, 0, two, 3, 1, true);  // clipped on the left
+  CHECK(!r.get(0, 0) && r.get(1, 0));
+}
+
+static void testJimmyFace() {
+  uint8_t buffer[Raster::kBytes];
+  Raster r(buffer);
+  r.clear();
+  drawJimmyFace(r, 64, 32, 26, 0.0f, false);
+  CHECK(r.get(64, 10) && r.get(64, 54));    // a solid head
+  CHECK(!r.get(64, 32 - 29) && !r.get(64 + 29, 32));  // with dark space around it
+  CHECK(!r.get(64 - 9, 30));                // a dark pupil in the left eye
+  r.clear();
+  drawJimmyFace(r, 64, 32, 26, 0.0f, true);
+  CHECK(r.get(64 - 9, 30));                 // squinting: the pupil is gone
+}
+
+static void testBootAnimation() {
+  using B = BootAnimation;
+  BootFrame f = B::frame(0);
+  CHECK(f.wordReveal == 0.0f && !f.showJimmy && f.wordX == B::kWordStartX);
+  f = B::frame(B::kWipeStartMs + B::kWipeMs);
+  CHECK(f.wordReveal == 1.0f && !f.showJimmy);
+
+  // Jimmy rolls in from past the right edge, knocks the wordmark away, and stops in the middle, upright.
+  f = B::frame(B::kRollInStartMs);
+  CHECK(f.jimmyX - B::kJimmyRadius > Raster::kWidth && f.wordX == B::kWordStartX);
+  int16_t lastX = f.jimmyX;
+  for (uint32_t ms = B::kRollInStartMs; ms < B::kRollInStartMs + B::kRollInMs; ms += 33) {
+    f = B::frame(ms);
+    CHECK(f.jimmyX <= lastX && f.wordX + kWordmarkWidth <= f.jimmyX - B::kJimmyRadius + 2);  // never overlapping
+    lastX = f.jimmyX;
+  }
+  f = B::frame(B::kRollInStartMs + B::kRollInMs);
+  CHECK(f.jimmyX == B::kJimmyRestX && f.wordX + kWordmarkWidth <= 0 && f.squint);
+  CHECK(B::frame(B::kRollInStartMs + B::kRollInMs - 1).rotationDeg < 1.0f);  // he arrives upright
+
+  // Rolling away to the left, with stripes trailing out from behind him.
+  f = B::frame(B::kRollOutStartMs + 400);
+  CHECK(!f.squint && f.jimmyX < B::kJimmyRestX && f.rotationDeg < 0.0f);
+  int showing = 0;
+  for (const BootStripe& stripe : f.stripes) {
+    if (stripe.width > 0) showing++;
+    CHECK(stripe.left >= f.jimmyX - 1 && stripe.left <= f.jimmyX + 1);  // near ends level with him, none lagging
+  }
+  CHECK(showing == B::kStripeCount);
+
+  // A clear screen at the end, before the toy moves on.
+  uint8_t buffer[Raster::kBytes];
+  Raster r(buffer);
+  B::draw(r, B::kTotalMs - 1);
+  int lit = 0;
+  for (size_t i = 0; i < Raster::kBytes; i++) lit += __builtin_popcount(buffer[i]);
+  CHECK(lit == 0);
+  B::draw(r, B::kRollInStartMs + B::kRollInMs + 100);  // mid-smile: Jimmy is on screen
+  CHECK(r.get(B::kJimmyRestX, B::kJimmyY - B::kJimmyRadius + 3));
+}
+
 int main() {
   runVectorTests();
   testUuid();
@@ -620,6 +702,9 @@ int main() {
   testInputTaps();
   testRumble();
   testResultAnimation();
+  testRaster();
+  testJimmyFace();
+  testBootAnimation();
   if (failures) {
     fprintf(stderr, "%d check(s) failed\n", failures);
     return 1;

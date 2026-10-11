@@ -30,6 +30,7 @@
 #include "oled_ui.h"
 #include "score_storage.h"
 #include "src/basic_modes.h"
+#include "src/boot_animation.h"
 #include "src/celebration.h"
 #include "src/connection_approval.h"
 #include "src/fidget_protocol.h"
@@ -41,7 +42,7 @@
 
 using namespace jimmyit;
 
-enum class Screen : uint8_t { Welcome, Instructions, Ready, Playing, Result, Notice, App };
+enum class Screen : uint8_t { Boot, Welcome, Instructions, Ready, Playing, Result, Notice, App };
 
 constexpr uint32_t kWelcomeMs = 5000;
 constexpr uint32_t kInstructionsMs = 10000;
@@ -50,6 +51,7 @@ constexpr uint32_t kNoticeMs = 2000;
 constexpr uint32_t kForgetPhonesHoldMs = 5000;
 constexpr uint32_t kDeclineDisconnectDelayMs = 300;  // lets the "declined" message go out first
 constexpr uint32_t kAnimationFrameMs = 60;
+constexpr uint32_t kBootFrameMs = 33;  // ~30 fps, so Jimmy's roll stays smooth (a frame takes ~25 ms at 400 kHz)
 constexpr uint32_t kMinNotifyGapMs = 20;  // at most 50 input notifications a second
 constexpr uint32_t kHeartbeatMs = 1000;
 
@@ -68,7 +70,7 @@ constexpr uint16_t kMenuBits = kToyGameCount > 1 ? kNavBits : 0;
 
 namespace {
 
-Screen screen = Screen::Welcome;
+Screen screen = Screen::Boot;
 uint32_t screenStartMs = 0;
 bool redraw = true;
 size_t selectedGame = 0;
@@ -451,6 +453,9 @@ void updateStandalone(uint32_t nowMs) {
   const uint32_t elapsed = nowMs - screenStartMs;
 
   switch (screen) {
+    case Screen::Boot:
+      if (elapsed >= BootAnimation::kTotalMs || pressed) goTo(Screen::Welcome, nowMs);  // a press skips ahead
+      break;
     case Screen::Welcome:
       if (elapsed >= kWelcomeMs || pressed) goTo(Screen::Instructions, nowMs);  // a press skips ahead
       break;
@@ -520,6 +525,7 @@ void updateStandalone(uint32_t nowMs) {
 
 void drawScreen(uint32_t nowMs) {
   switch (screen) {
+    case Screen::Boot: uiBoot(nowMs - screenStartMs); break;
     case Screen::Welcome: uiWelcome(); break;
     case Screen::Instructions: uiInstructions(); break;
     case Screen::Ready: uiReady(gameTitle(kToyGames[selectedGame]), kToyGameCount > 1, linked); break;
@@ -559,9 +565,11 @@ void render(uint32_t nowMs) {
     wasAnimating = false;
     redraw = true;
   }
-  // The result screen's sparkles and the running-down bar move every frame.
-  const bool screenAnimates = screen == Screen::Result || (screen == Screen::Playing && graceShown);
-  if (screenAnimates && nowMs - lastScreenFrameMs >= kAnimationFrameMs) redraw = true;
+  // The boot animation, the result screen's sparkles and the running-down bar move every frame.
+  const bool screenAnimates = screen == Screen::Boot || screen == Screen::Result ||
+                              (screen == Screen::Playing && graceShown);
+  const uint32_t frameMs = screen == Screen::Boot ? kBootFrameMs : kAnimationFrameMs;
+  if (screenAnimates && nowMs - lastScreenFrameMs >= frameMs) redraw = true;
   if (!redraw) return;
   redraw = false;
   lastScreenFrameMs = nowMs;
@@ -587,7 +595,7 @@ void setup() {
   const uint32_t now = millis();
   readInputs(now);  // debounce baseline
   bleBegin(makeInfo(), current);
-  goTo(Screen::Welcome, now);
+  goTo(Screen::Boot, now);
 }
 
 void loop() {
