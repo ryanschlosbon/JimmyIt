@@ -139,14 +139,14 @@ export const PLAY_SHELF: readonly ShelfGame[] = [
   },
   {
     id: 'buttonHero', title: 'Button Hero', art: 'rhythm', color: 'rhythm', uses: 'touch', stat: 'best',
-    tagline: 'Press the lane as each note arrives.',
-    howTo: 'Use A, S, D, F on a computer or tap the colorful lane buttons. Every well-timed press earns points.',
+    tagline: 'Click, press or spin to the beat.',
+    howTo: 'Do each move as its note reaches the ring: click, press left or right, or keep spinning through a purple bar. On a computer use A, S, D and hold F.',
     options: [], scoreGameId: () => 'button-hero-normal',
   },
   {
     id: 'knobQuest', title: 'Knob Quest', art: 'dualKnobs', color: 'quest', uses: 'touch', stat: 'best',
-    tagline: 'Steer with two knobs.',
-    howTo: 'Use arrow keys or touch arrows. Left and right steer; turn faster upward to climb against gravity.',
+    tagline: 'Roll Jimmy to the flag.',
+    howTo: 'Spin to roll and turn the screw to float up; faster turns push harder. Hop over holes and land on platforms for points. On a computer use the arrow keys.',
     options: [], scoreGameId: () => 'knob-quest',
   },
 ];

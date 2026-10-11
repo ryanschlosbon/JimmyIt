@@ -226,8 +226,9 @@ grep -rn "ANIMATION(" apps/mobile/src
 | `bubblesFloat` | `Bubbles` | Floating background bubbles |
 | `screenEnter` | `PlayScreen` | Banners fade up when the play screen opens |
 | `introReveal` | `IntroScreen` | A coral iris closes on Jimmy, he hops, then rolls off pulling the screen away in stripes |
-| `celebrationPop` | `CelebrationOverlay` | The score-moment card springs in |
-| `celebrationConfetti` | `CelebrationOverlay` | Falling confetti for score moments |
+| `scorePop` | `GameScoreBar` | At a score moment the score pops and a "100 points!" / "New best!" chip springs in |
+| `scoreSparks` | `GameScoreBar` | A one-time burst of sparks off the score at a score moment |
+| `toastSlide` | `CelebrationToast` | A strip slides down for score moments in the toy's own games |
 
 Rules for new animations:
 
