@@ -21,8 +21,11 @@ power on → WELCOME (5 s) → INSTRUCTIONS (10 s) → READY ──first move─
   (`BasicGame::kFreePlayIdleEndMs`, 20 s) or after 3 minutes.
 - **Every finished game is saved to flash** (up to 200; the oldest is replaced
   when full), with a real timestamp if the app has set the clock since power-on.
-- **When the app connects, it uploads every game it hasn't seen yet**, then the
-  toy's screen belongs to the app until it disconnects.
+- **When the app connects, it uploads every game it hasn't seen yet.** The toy
+  keeps playing Free Play while connected, and those games reach the app as they
+  finish. Starting a game in the app ends a toy game in progress (it is saved)
+  and hands the screen to the app. When the app game ends, the toy shows its score
+  on the result screen, then Free Play is ready again.
 - On the full toy, **the left/right menu keys on READY pick Spin Count** (30 s,
   +10 per full spinner turn). It appears only when `JIMMYIT_HAS_AS5600` is on.
 - Input is read the whole time: no blocking `delay()` screens.
