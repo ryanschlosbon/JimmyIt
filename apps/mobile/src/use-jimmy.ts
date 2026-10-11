@@ -6,6 +6,10 @@ import { AI_MODELS, DEFAULT_AI_SETTINGS, createConfiguredAIService, registerGemi
   removeGeminiKey, type AISettings } from './ai-service';
 import { GAME_CATALOG } from './games';
 import { registerShapeKey, removeShapeKey } from './shape-recognition-service';
+import { DEFAULT_COLOR_STYLE, isColorStyleId, type ColorStyleId } from './design/palettes';
+
+/** Where appearance choices are saved on the device. */
+const APPEARANCE_KEYS = { dark: 'jimmy.appearance', bubbles: 'jimmy.bubbles', colorStyle: 'jimmy.colorStyle' } as const;
 
 /** 'confirming': Jimmy is asking the child "connect to this phone?" on its screen. */
 export type Connection = 'connected' | 'disconnected' | 'searching' | 'confirming';
@@ -26,6 +30,8 @@ export function useJimmy() {
   const scores = useScores({ games: GAME_CATALOG });
   const toy = useToyState();
   const [dark, setDarkState] = useState(false);
+  const [bubbles, setBubblesState] = useState(true);
+  const [colorStyle, setColorStyleState] = useState<ColorStyleId>(DEFAULT_COLOR_STYLE);
   const [appearanceReady, setAppearanceReady] = useState(false);
   const [aiSettings, setAISettingsState] = useState<AISettings>(DEFAULT_AI_SETTINGS);
   const [aiConnection, setAIConnection] = useState<'unchecked' | 'checking' | 'ready' | 'unavailable'>('unchecked');
@@ -38,7 +44,13 @@ export function useJimmy() {
 
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem('jimmy.appearance').then(value => { if (active) setDarkState(value === 'dark'); })
+    Promise.all([AsyncStorage.getItem(APPEARANCE_KEYS.dark), AsyncStorage.getItem(APPEARANCE_KEYS.bubbles),
+      AsyncStorage.getItem(APPEARANCE_KEYS.colorStyle)]).then(([darkValue, bubblesValue, styleValue]) => {
+      if (!active) return;
+      setDarkState(darkValue === 'dark');
+      setBubblesState(bubblesValue !== 'off');
+      if (isColorStyleId(styleValue)) setColorStyleState(styleValue);
+    })
       .catch(() => { if (active) setLocalError('Your appearance preference could not be opened.'); })
       .finally(() => { if (active) setAppearanceReady(true); });
     return () => { active = false; };
@@ -117,11 +129,13 @@ export function useJimmy() {
     }, 350);
   };
 
-  const setDark = (next: boolean) => {
-    setDarkState(next);
-    AsyncStorage.setItem('jimmy.appearance', next ? 'dark' : 'light')
+  const saveAppearance = (key: string, value: string) => {
+    AsyncStorage.setItem(key, value)
       .catch(() => setLocalError('Your appearance changed, but could not be saved for next time.'));
   };
+  const setDark = (next: boolean) => { setDarkState(next); saveAppearance(APPEARANCE_KEYS.dark, next ? 'dark' : 'light'); };
+  const setBubbles = (next: boolean) => { setBubblesState(next); saveAppearance(APPEARANCE_KEYS.bubbles, next ? 'on' : 'off'); };
+  const setColorStyle = (next: ColorStyleId) => { setColorStyleState(next); saveAppearance(APPEARANCE_KEYS.colorStyle, next); };
 
   const progress = useMemo(() => ({
     ...scores.progress,
@@ -134,6 +148,9 @@ export function useJimmy() {
 
   return {
     dark, setDark,
+    /** Floating background bubbles (Settings → Appearance). */
+    bubbles, setBubbles,
+    colorStyle, setColorStyle,
     aiSettings, setAISettings, aiConnection, testAIConnection, aiService,
     hasGeminiKey: aiSessionToken !== undefined, saveGeminiKey, clearGeminiKey,
     shapeSessionToken, saveShapeKey, clearShapeKey,

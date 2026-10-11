@@ -1,6 +1,6 @@
 import { createAppScoreRecord, type ScoreRecord } from '@jimmyit/core';
 import { describe, expect, it } from 'vitest';
-import { DRAWING_GAMES, GAME_CATALOG, SHAPE_CHALLENGE_GAME, tapQuestGame,
+import { DRAWING_GAMES, GAME_CATALOG, PLAY_SHELF, SHAPE_CHALLENGE_GAME, tapQuestGame,
   TIMED_PRACTICE_SECONDS, timedPracticeGame } from './games';
 
 function tapQuestRecord(mode: string, metrics: Record<string, number>, minutesAgo: number): ScoreRecord {
@@ -50,6 +50,11 @@ describe('game registry', () => {
     expect(timedPracticeGame(60_000)).toMatchObject({ id: 'timed-motor-practice', durationMs: 60_000 });
     expect(timedPracticeGame(60_000)).toBe(timedPracticeGame(60_000));
     expect(DRAWING_GAMES.shapes.id).toBe('shape-challenge');
+  });
+
+  it('shows the Shape Challenge banner the score of the game its screen plays', () => {
+    const shapes = PLAY_SHELF.find(game => game.id === 'shapes');
+    expect(shapes?.scoreGameId(null)).toBe(SHAPE_CHALLENGE_GAME.id);
   });
 });
 

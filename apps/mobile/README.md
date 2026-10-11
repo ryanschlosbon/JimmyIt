@@ -26,11 +26,14 @@ permissions or connects to real hardware. Expo Go can preview this UI; integrati
 ## Screens and state
 
 - **Intro:** the supplied mint `JIMMY.png` transitions to coral `Jimmying.png` with
-  a gentle crossfade and small zoom, then opens Home. It lasts about two seconds,
+  a gentle crossfade and small zoom, then opens Play. It lasts about two seconds,
   has an always-available skip button, plays once per app launch, and becomes a
   short static welcome when reduced motion is enabled. Bundled artwork uses
   contain sizing so phone and tablet orientations do not crop the logo.
-- **Home:** activity launcher, settings shortcut, persistent Home / Draw / Rewards navigation.
+- **Play (home):** a swipeable shelf of game banners (Timed Run, Tap Quest, Drawing, Shape Challenge).
+  Each banner shows the game's art, high score, a one-line description, option chips (time limit, mode),
+  a Play button and a "How to play" tip. Change game by swiping, the arrows, the dots, the keyboard's arrow
+  keys, or tapping the next banner. The header has Play, Rewards and Settings. See [DESIGN.md](DESIGN.md).
 - **Draw:** finger, stylus, and mouse input; eight colors; brush sizes; whole-stroke undo;
   clear; completion celebration. Shape challenge opens the same canvas with a circle to trace.
   Drawing and shape drafts survive navigation separately, until completion or app reload.
@@ -49,14 +52,15 @@ permissions or connects to real hardware. Expo Go can preview this UI; integrati
   Leaving the screen or switching apps pauses the session. Completed sessions use stable
   IDs and the shared score repository, including retry after a storage error.
 - **Settings:** find / cancel / disconnect / reconnect, the toy's real name and battery,
-  cancellable calibration, and persistent light / dark mode. Connection starts disconnected
+  cancellable calibration, and Look & feel: light / dark mode, floating bubbles on / off, and the
+  color style (Classic or Calm). All three are saved on the device. Connection starts disconnected
   after a reload. Calibration never changes real hardware values.
 
 Scores are created by the shared game runner (`useGameRun`) and saved only through
 the shared `ScoreRepository`, backed by AsyncStorage. Each run saves one record, so
 retrying a failed save can never double-count.
 Unsupported saved score schemas are preserved and reported, never overwritten.
-Appearance is saved separately as `jimmy.appearance`. All data stays on the device;
+Appearance is saved separately as `jimmy.appearance`, `jimmy.bubbles` and `jimmy.colorStyle`. All data stays on the device;
 fonts are bundled and there are no analytics or remote services.
 
 All app logic comes from `@jimmyit/app-kit` hooks and the `@jimmyit/game-*`
@@ -80,16 +84,18 @@ which is a placeholder look driven by app-kit's `useCelebration()`.
 
 ```text
 index.ts                    registered Expo entry point (named App export)
-src/App.tsx                 app shell, services provider, navigation, drafts, completion dialog
-src/screens/                Intro, Home, Drawing, Timed practice, Rewards, Settings
-src/components/             controls, vector Jimmy, icons, vector drawing canvas
+DESIGN.md                   the design system: read before changing anything visible
+src/App.tsx                 app shell: header, bubbles, navigation, game runs, finish dialog
+src/design/                 palettes (colors and color styles), tokens (type, sizes), motion (animations)
+src/screens/                Play (home), Drawing, Timed Run, Tap Quest, Rewards, Settings, Intro
+src/components/             Tappable, controls, header, game banners and art, page dots, bubbles, Jimmy, icons, canvas
 src/use-jimmy.ts            screen-facing state over app-kit hooks: wording, appearance, calibration demo
-src/games.ts                game registry: which games the app offers
-src/toy-connector.ts        virtual toy in development / web previews; Bluetooth later
+src/games.ts                game registry and the play shelf (PLAY_SHELF)
+src/toy-connector.ts        virtual toy in development / web previews; Bluetooth in release builds
 src/badge-visuals.ts        icon and color for each badge id
-src/artwork.ts               editable image slots and intro background colors
-assets/                      supplied intro compositions and your replacement artwork
-src/theme.ts                 light / dark tokens
+src/artwork.ts              editable image slots and intro background colors
+assets/                     supplied intro compositions and your replacement artwork
+src/theme.ts                getTheme(dark, colorStyle)
 ```
 
 Scoring rules, drawing strokes, timed practice and rewards moved out of this
@@ -110,7 +116,8 @@ Root checks cover the original shared packages and games. The separate mobile
 commands cover the new app. Firmware tests are required only for firmware or
 protocol changes, neither of which is part of this frontend.
 
-Manual checks: intro / skip / reduced motion; navigation; draw / tap / undo / clear; brush and color selection;
+Manual checks: intro / skip / reduced motion; play shelf swipe / arrows / dots / keyboard; banner options,
+tips and Play; bubbles on / off; color styles; navigation; draw / tap / undo / clear; brush and color selection;
 shape prompt; completion and saved points; earned / locked / in-progress badges;
 reload with saved dark mode; search / cancel / reconnect; calibration; keyboard
 focus; timed practice / pause / resume / early finish / automatic completion;
@@ -118,7 +125,9 @@ and tablet / phone layouts. A native Android emulator or device is still
 needed to validate stylus and touch behavior on Android hardware.
 
 The UI uses 56px or larger controls, visible focus rings, text plus icons for
-states, and no flashing. Only the brief, skippable intro moves automatically.
+states, and no flashing. Moving things (the intro, floating bubbles, banner
+slides) are listed in `src/design/motion.ts`; all of them respect reduced
+motion, and the bubbles can be turned off in Settings.
 Secondary labels use 14–18px where
 24px would make compact controls impractical; main copy uses 24px and larger.
 The canvas uses normalized vector coordinates and a palette visible on both backgrounds.

@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { defaultAccessibilityPreferences, getPersonalizationRecommendation,
   type GameType, type GeneratedLevel, type PersonalizationRecommendation } from '@jimmyit/ai';
-import { Body, Button, Eyebrow, Heading, ProgressBar } from '../components/Controls';
+import { Body, Button, Eyebrow, Heading, ProgressBar, SwitchRow } from '../components/Controls';
+import { COLOR_STYLES, COLOR_STYLE_IDS } from '../design/palettes';
+import { FONTS } from '../design/tokens';
 import { Icon, type IconName } from '../components/Icon';
 import { Jimmy } from '../components/Jimmy';
 import type { Theme } from '../theme';
@@ -92,7 +94,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
   const panels: readonly { title: string; eyebrow: string; icon: IconName; color: string }[] = [
     { title: 'Connection', eyebrow: 'BLUETOOTH', icon: 'bluetooth', color: theme.mint },
     { title: 'Calibration', eyebrow: 'SENSITIVITY', icon: 'toy', color: theme.coral },
-    { title: 'Dark mode', eyebrow: 'APPEARANCE', icon: 'moon', color: theme.pink },
+    { title: 'Look & feel', eyebrow: 'APPEARANCE', icon: 'moon', color: theme.pink },
   ];
   return <View style={{ gap: 26 }}>
     <View style={{ backgroundColor: theme.surface, borderRadius: 26, padding: 30,
@@ -109,7 +111,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
           ? 'Virtual toy' : state.connectorKind === 'bluetooth' ? 'Bluetooth' : 'No toy connection in this build'}</Body></View>
       </View>
       <View style={{ flexDirection: 'row', gap: 10, backgroundColor: theme.raised, borderRadius: 16, padding: 16 }}>
-        <Icon name="battery" color={theme.dark ? theme.mint : '#087C71'} />
+        <Icon name="battery" color={theme.accentText} />
         <Body theme={theme} small>{state.connection === 'connected' && state.batteryPercent !== null
           ? `${state.batteryPercent}% battery` : 'Battery —'}</Body>
       </View>
@@ -148,21 +150,20 @@ export function SettingsScreen({ theme, state, replayIntro }: {
             {state.connection !== 'connected' && <Body theme={theme} small>Connect Jimmy first.</Body>}
           </>}
           {index === 2 && <>
-            <Body theme={theme} small>A softer glow for quieter play. Your choice stays saved on this device.</Body>
-            <View style={{ flexDirection: 'row', gap: 15, justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: theme.raised, padding: 18, borderRadius: 17 }}>
-              <View style={{ flex: 1, gap: 5 }}><Heading theme={theme} size={23}>Use dark colors</Heading>
-                <Body theme={theme} small>{state.dark ? 'Dark mode is on' : 'Dark mode is off'}</Body></View>
-              <Pressable accessibilityRole="switch" accessibilityLabel="Use dark colors"
-                accessibilityState={{ checked: state.dark }} onPress={() => state.setDark(!state.dark)}
-                style={({ pressed }) => ({ minWidth: 64, minHeight: 56, justifyContent: 'center',
-                  alignItems: 'center', opacity: pressed ? .7 : 1 })}>
-                <View style={{ width: 54, height: 32, borderRadius: 20, padding: 4,
-                  backgroundColor: state.dark ? '#087C71' : '#8798A8',
-                  alignItems: state.dark ? 'flex-end' : 'flex-start' }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF' }} />
-                </View>
-              </Pressable>
+            <Body theme={theme} small>Make Jimmy’s world look just right. Your choices stay saved on this device.</Body>
+            <SwitchRow theme={theme} title="Use dark colors" onText="Dark mode is on" offText="Dark mode is off"
+              value={state.dark} onChange={state.setDark} />
+            <SwitchRow theme={theme} title="Floating bubbles" onText="Bubbles drift in the background"
+              offText="Bubbles stay still" value={state.bubbles} onChange={state.setBubbles} />
+            <View accessibilityRole="radiogroup" accessibilityLabel="Color style" style={{ gap: 10 }}>
+              <Text style={{ fontFamily: FONTS.bodyBold, fontSize: 18, color: theme.text }}>Color style</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {COLOR_STYLE_IDS.map(id => <Button key={id} theme={theme} compact label={COLOR_STYLES[id].label}
+                  accessibilityLabel={`${COLOR_STYLES[id].label} colors: ${COLOR_STYLES[id].description}`}
+                  selected={state.colorStyle === id} color={state.colorStyle === id ? theme.mint : undefined}
+                  onPress={() => state.setColorStyle(id)} />)}
+              </View>
+              <Body theme={theme} small>{COLOR_STYLES[state.colorStyle].description}</Body>
             </View>
           </>}
         </View>
@@ -283,7 +284,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
       </View>
     </View>
     <View style={{ flexDirection: 'row', gap: 14, backgroundColor: theme.raised, borderRadius: 18, padding: 22 }}>
-      <Icon name="sparkle" color={theme.dark ? theme.yellow : '#8A6500'} />
+      <Icon name="sparkle" color={theme.gold} />
       <View style={{ flex: 1, gap: 4 }}><Heading theme={theme} size={23}>A safe place to practice</Heading>
         <Body theme={theme} small>{state.connectorKind === 'simulated' ? 'This preview uses a virtual Jimmy (the Toy button). Calibration is simulated.'
           : 'Calibration is simulated for now.'} Drawings and points stay on this device.</Body>

@@ -18,12 +18,12 @@ export function RewardsScreen({ theme, progress }: {
       justifyContent: 'space-between', overflow: 'hidden' }}>
       <View style={{ flex: 1, gap: 12 }}>
         <Text style={{ fontFamily: 'PoppinsBold', fontSize: 14, letterSpacing: 2, color: '#6D1B53' }}>YOUR LITTLE BIG WINS</Text>
-        <Heading theme={{ ...theme, text: '#203858' }} level={1} size={compact ? 38 : 47}>Look what you’ve{compact ? ' ' : '\n'}achieved!</Heading>
+        <Heading theme={{ ...theme, text: theme.navy }} level={1} size={compact ? 38 : 47}>Look what you’ve{compact ? ' ' : '\n'}achieved!</Heading>
         <Body theme={theme} small color="#203858">Every try is something to celebrate.</Body>
       </View>
       {!compact && <Jimmy face size={108} color="#F48B7C" />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, borderRadius: 20,
-        padding: 23, backgroundColor: '#9B287C' }}>
+        padding: 23, backgroundColor: theme.berry }}>
         <Icon name="star" color="#FFD844" size={35} />
         <View><Text style={{ fontFamily: 'Baloo', fontSize: 38, color: '#FFFFFF' }}>{progress.points.toLocaleString()}</Text>
           <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins', fontSize: 16 }}>total points</Text></View>
@@ -59,19 +59,19 @@ export function RewardsScreen({ theme, progress }: {
             backgroundColor: theme.surface, minWidth: columns === 2 ? 130 : 180 }}>
           <View style={{ height: compact ? 110 : 145, backgroundColor: background,
             alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ borderRadius: 20, borderWidth: 2, borderColor: '#203858', padding: 16,
+            <View style={{ borderRadius: 20, borderWidth: 2, borderColor: theme.navy, padding: 16,
               transform: [{ rotate: '-7deg' }], backgroundColor: '#FFFFFF45' }}>
               <Icon name={badge.icon} size={38} color="#203858" />
             </View>
             <View style={{ position: 'absolute', right: 12, top: 12, borderRadius: 16,
-              padding: 6, backgroundColor: isEarned ? '#087C71' : '#FFFFFF' }}>
+              padding: 6, backgroundColor: isEarned ? theme.accentText : theme.surface }}>
               <Icon name={isEarned ? 'check' : 'lock'} size={18} color={isEarned ? '#FFFFFF' : '#5F7085'} />
             </View>
           </View>
           <View style={{ padding: compact ? 14 : 20, gap: 10 }}>
             <Heading theme={theme} size={compact ? 22 : 27}>{badge.label}</Heading>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Body theme={theme} small color={isEarned ? (theme.dark ? theme.mint : '#087C71') : theme.secondary}>
+              <Body theme={theme} small color={isEarned ? (theme.accentText) : theme.secondary}>
                 {isEarned ? '✓ Earned' : badge.count > 0 ? 'Keep going!' : 'Locked'}
               </Body>
               {!isEarned && <Body theme={theme} small>{Math.min(badge.count, badge.goal)} / {badge.goal}</Body>}

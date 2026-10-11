@@ -32,16 +32,16 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
       <View style={{ gap: 7 }}><Eyebrow theme={theme}>{shapes
         ? `Shape ${Math.min(shapeIndex + 1, shapeCount)} of ${shapeCount}` : 'Your imagination lives here'}</Eyebrow>
-        <Heading theme={theme} level={1} size={compact ? 36 : 44}>{shapes ? 'Shape challenge' : 'Drawing with Jimmy'}</Heading></View>
+        <Heading theme={theme} level={1} size={compact ? 36 : 44}>{shapes ? 'Shape Challenge' : 'Drawing with Jimmy'}</Heading></View>
       {!compact && <View style={{ backgroundColor: theme.softMint, padding: 14, borderRadius: 15,
         flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Icon name="star" color={theme.dark ? theme.mint : '#087C71'} size={20} />
+        <Icon name="star" color={theme.accentText} size={20} />
         <Body theme={theme} small>Every try earns points</Body>
       </View>}
     </View>
     <View style={{ backgroundColor: theme.softMint, borderRadius: 18, paddingHorizontal: 22, paddingVertical: 15,
       flexDirection: 'row', alignItems: 'center', gap: 13 }}>
-      <Icon name={shapes ? 'shapes' : 'sparkle'} color={theme.dark ? theme.mint : '#087C71'} />
+      <Icon name={shapes ? 'shapes' : 'sparkle'} color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {shapes ? `Can you follow the ${shapeTarget}? Take your time — every little try counts.`
           : 'Pick a color. Make your mark. There’s no wrong way to create!'}
@@ -63,11 +63,11 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
             onBlur={() => setFocusedColor(null)} style={({ pressed }) => [{
               width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
               borderWidth: color === swatch.color || focusedColor === swatch.color ? 3 : 1.5,
-              borderColor: focusedColor === swatch.color ? (theme.dark ? theme.yellow : '#9A6E00')
+              borderColor: focusedColor === swatch.color ? theme.focus
                 : color === swatch.color ? theme.text : theme.border,
               backgroundColor: swatch.color, opacity: pressed ? .7 : 1,
             }]}>
-            {color === swatch.color && <View style={{ backgroundColor: '#203858', padding: 3, borderRadius: 12 }}>
+            {color === swatch.color && <View style={{ backgroundColor: theme.navy, padding: 3, borderRadius: 12 }}>
               <Icon name="check" color="#FFFFFF" size={19} />
             </View>}
           </Pressable>)}
