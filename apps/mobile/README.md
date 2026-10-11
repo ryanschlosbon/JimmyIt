@@ -30,11 +30,12 @@ needs a development or release build.
 
 ## Screens and state
 
-- **Intro:** the supplied mint `JIMMY.png` transitions to coral `Jimmying.png` with
-  a gentle crossfade and small zoom, then opens Play. It lasts about two seconds,
-  has an always-available skip button, plays once per app launch, and becomes a
-  short static welcome when reduced motion is enabled. Bundled artwork uses
-  contain sizing so phone and tablet orientations do not crop the logo.
+- **Intro:** on mint, a coral iris closes in on Jimmy's face (ending on the coral `Jimmying.png`
+  composition). Jimmy hops, lands with a squishy little rebound, then rolls off to the right,
+  pulling the coral screen away in rounded stripes to reveal Play underneath. It lasts about five
+  seconds, has an always-available skip button, plays once per app launch, and becomes a short
+  static welcome when reduced motion is enabled. The composition uses contain sizing so phone and
+  tablet orientations do not crop the logo.
 - **Play (home):** a swipeable shelf of game banners (Timed Run, Tap Quest, Drawing, Shape Challenge).
   Each banner shows the game's art, high score, a one-line description, option chips (time limit, mode),
   a Play button and a "How to play" tip. Change game by swiping, the arrows, the dots, the keyboard's arrow
@@ -99,7 +100,7 @@ src/games.ts                game registry and the play shelf (PLAY_SHELF)
 src/toy-connector.ts        virtual toy in development / web previews; Bluetooth in release builds
 src/badge-visuals.ts        icon and color for each badge id
 src/artwork.ts              editable image slots and intro background colors
-assets/                     supplied intro compositions and your replacement artwork
+assets/                     intro face and wordmark (cut from the supplied compositions) and your replacement artwork
 src/theme.ts                getTheme(dark, colorStyle)
 ```
 

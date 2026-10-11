@@ -225,7 +225,7 @@ grep -rn "ANIMATION(" apps/mobile/src
 | `tipReveal` | `GameBanner` | The "How to play" tip fades and grows in |
 | `bubblesFloat` | `Bubbles` | Floating background bubbles |
 | `screenEnter` | `PlayScreen` | Banners fade up when the play screen opens |
-| `introCrossfade` | `IntroScreen` | The opening picture crossfade and zoom |
+| `introReveal` | `IntroScreen` | A coral iris closes on Jimmy, he hops, then rolls off pulling the screen away in stripes |
 | `celebrationPop` | `CelebrationOverlay` | The score-moment card springs in |
 | `celebrationConfetti` | `CelebrationOverlay` | Falling confetti for score moments |
 

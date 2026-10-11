@@ -5,20 +5,23 @@ to swap images. You do not need to rewrite the screen containers.
 
 ## Opening animation
 
-The files are already copied from the images you supplied:
+The intro is built from two pieces cut from your supplied `Jimmying.png` composition, so Jimmy can
+move on his own:
 
-- `assets/intro-start.png` — your mint `JIMMY.png` (second image).
-- `assets/intro-end.png` — your coral `Jimmying.png` (first image).
+- `assets/intro-face.png`: Jimmy's round face, transparent outside the circle.
+- `assets/intro-wordmark.png`: the "JimmyIt" wordmark on a transparent background.
 
-Replace those files, keeping the same names, to change the intro without editing
-code. Both images are complete 1280 × 800 compositions, displayed without cropping.
-If the replacement backgrounds have different colors, update `INTRO_BACKGROUNDS`
-in `src/artwork.ts` to match. These colors fill the extra space on portrait phones.
+The screen starts mint (`INTRO_BACKGROUNDS.start`). A coral ring (`INTRO_BACKGROUNDS.end`) closes in from
+beyond the screen's corners until its hole is exactly Jimmy's face. Then Jimmy hops, lands with a little
+rebound, and rolls off to the right, pulling the coral screen away in rounded stripes to show Play.
 
-The intro crossfades and gently zooms from the start image to the end image over
-about two seconds. Timing lives in `src/screens/IntroScreen.tsx`. Reduced-motion
-users see the final still briefly; the skip / Let's play button is always available.
-It plays each time the app launches or its web preview is refreshed. Use
+Replace either file, keeping the same name, to change the art. `INTRO_LAYOUT` in `src/artwork.ts` says where
+the face and wordmark sit in the original 1280 × 800 composition. Update it if your pieces are a different
+size or in a different place. The composition is shown whole (contain sizing) on every screen shape.
+
+Timing lives in `ANIMATIONS.introReveal` (`src/design/motion.ts`); the stripes' shapes are at the top of
+`src/screens/IntroScreen.tsx`. Reduced-motion users see the coral picture briefly; the skip / Let's play
+button is always available. It plays each time the app launches or its web preview is refreshed. Use
 **Settings → Replay welcome** to preview changes again.
 
 ## Other image containers

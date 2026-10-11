@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Modal, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -241,12 +241,18 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     if (tapQuest.status !== 'running' && tapQuest.status !== 'paused') setTapQuestAutoStart(true);
   };
 
-  if (!introDone) return <IntroScreen ready={(fontsLoaded || Boolean(fontError)) && state.ready} onDone={finishIntro} />;
+  // The intro sits on top of the app, which is already rendered underneath so the intro can peel away to
+  // reveal it. The wrappers stay the same when the intro ends, so the screen below is not rebuilt.
+  const withIntro = (content: ReactNode) => <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }} aria-hidden={!introDone}
+      importantForAccessibility={introDone ? 'auto' : 'no-hide-descendants'}>{content}</View>
+    {!introDone && <IntroScreen ready={(fontsLoaded || Boolean(fontError)) && state.ready} onDone={finishIntro} />}
+  </View>;
 
-  if ((!fontsLoaded && !fontError) || !state.ready) return <SafeAreaView style={{ flex: 1,
+  if ((!fontsLoaded && !fontError) || !state.ready) return withIntro(<SafeAreaView style={{ flex: 1,
     backgroundColor: theme.page, justifyContent: 'center', alignItems: 'center', gap: 20 }}>
     <Jimmy face size={80} color={theme.mint} /><Text style={{ fontSize: 24, color: theme.text }}>Getting ready to play…</Text>
-  </SafeAreaView>;
+  </SafeAreaView>);
 
   const shapeState = drawingRuns.shapes.state;
   const shapeFeedback = shapeState?.lastResult?.target === shapeState?.target
@@ -258,7 +264,7 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>{state.error}</Body></View>
     <Button theme={theme} icon="close" accessibilityLabel="Dismiss message" onPress={() => state.setError(null)} compact />
   </View>;
-  return <View style={{ flex: 1, backgroundColor: theme.page }}>
+  return withIntro(<View style={{ flex: 1, backgroundColor: theme.page }}>
     <Bubbles theme={theme} animated={state.bubbles} />
     <SafeAreaView style={{ flex: 1 }}>
     <StatusBar barStyle={state.dark ? 'light-content' : 'dark-content'} backgroundColor={theme.page} />
@@ -325,5 +331,5 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
     </Modal>
     <CelebrationOverlay theme={theme} />
     </SafeAreaView>
-  </View>;
+  </View>);
 }

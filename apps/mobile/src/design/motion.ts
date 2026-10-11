@@ -38,8 +38,28 @@ export const ANIMATIONS = {
   },
   /** The play screen's banners fade up when the screen opens. */
   screenEnter: { enabled: true, ms: 280, risePx: 14 },
-  /** Opening screen: the first picture crossfades and zooms into the second (screens/IntroScreen.tsx). */
-  introCrossfade: { enabled: true, delayMs: 350, ms: 1100, holdMs: 650 },
+  /**
+   * Opening screen (screens/IntroScreen.tsx): a coral iris closes in on Jimmy's face, he hops and lands
+   * with a little rebound, then rolls off to the right, pulling the screen away in stripes.
+   */
+  introReveal: {
+    enabled: true,
+    delayMs: 350,
+    /** The coral iris closing from beyond the screen's corners to Jimmy's face. */
+    irisMs: 1000,
+    /** A pause on the finished picture before the hop. */
+    settleMs: 250,
+    /** Hop height as a fraction of Jimmy's radius (capped so he stays on screen). */
+    hopHeight: 1.2,
+    hopUpMs: 320,
+    hopDownMs: 280,
+    /** The small bounce after landing, as a fraction of the hop height. */
+    reboundHeight: 0.2,
+    /** A pause after landing before he rolls. */
+    holdMs: 220,
+    /** Rolling off to the right while the screen peels away in stripes. */
+    rollMs: 1500,
+  },
   /** Big score moments: the card springs in (components/CelebrationOverlay.tsx). */
   celebrationPop: { enabled: true, friction: 5, tension: 120 },
   /** Big score moments: confetti falls and spins (components/CelebrationOverlay.tsx). */
