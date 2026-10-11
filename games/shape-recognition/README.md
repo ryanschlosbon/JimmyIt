@@ -37,14 +37,13 @@ respects the selected maximum and automatic-increase preference. Neither
 function makes health or ability claims.
 
 `createShapeRecognizer()` runs geometry locally. It accepts an optional
-`ShapeModelAdapter`; that adapter must report ready only after loading and
-validating a real trained model. Failed inference falls back to geometry.
-There is currently **no trained model or ONNX runtime**. A future model workflow
-should collect consented, de-identified drawings, split by participant before
-training, report per-class recall and unknown rejection on held-out drawings,
-and test inference on the target phone. Keep model preprocessing and class
-order versioned with the trained weights. The included test covers fallback,
-not model accuracy.
+`ShapeModelAdapter`. The mobile app supplies an adapter backed by the existing
+AI proxy when `EXPO_PUBLIC_JIMMY_AI_URL` is configured. That proxy calls the
+pretrained Hugging Face model described in [HUGGING-FACE.md](HUGGING-FACE.md).
+Missing configuration, failed inference, and blank drawings fall back to local
+geometry. A live model result reports its provider, model ID, score, and
+inference time; geometry results report `provider: 'geometry'`. The model score
+is the endpoint's output, not a calibrated measure of a child's drawing skill.
 
 `ActivityContentAdapter` is an optional content interface.
 `createLocalActivityContentAdapter()` provides deterministic instructions.
@@ -79,9 +78,9 @@ up to 20 supported targets. No user-facing text is selected by the game beyond
 the toy's short display prompt; the frontend owns instructions and rendering.
 
 It is a screen game (`needsToy: false`) and is listed in the app's catalog
-(`apps/mobile/src/games.ts`) for scoreboards and the Shape Star badge. A drawing
-screen for it belongs to the frontend owner; `preview/shape-recognition/` is a
-local test page.
+(`apps/mobile/src/games.ts`) for scoreboards and the Shape Star badge. The
+existing Shape challenge canvas sends strokes to this game
+after recognition. `preview/shape-recognition/` is a local test page.
 
 The boundary checker currently forbids one game importing another. To use
 pattern and difficulty helpers from other games, their owner would need a

@@ -9,6 +9,8 @@ export interface ShapeRecognitionAction {
   /** Stable within one run so a repeated event cannot earn points twice. */
   readonly submissionId: string;
   readonly drawing: ShapeDrawing;
+  /** Optional result from the host's asynchronous model adapter. */
+  readonly prediction?: ShapePrediction;
 }
 
 export interface ShapeRecognitionState {
@@ -78,7 +80,17 @@ export function createShapeRecognitionGame(options: ShapeRecognitionOptions = {}
           if (seen.has(action.submissionId)) return;
           const target = targets[challengeIndex];
           if (!target) return;
-          const result = classifier.classify(action.drawing, target);
+          const supplied = action.prediction;
+          if (supplied && (!Number.isFinite(supplied.quality) || supplied.quality < 0 || supplied.quality > 1)) {
+            throw new RangeError('shape prediction quality is invalid');
+          }
+          const result = supplied ? {
+            ...supplied,
+            target,
+            matchesTarget: supplied.shape === target,
+            feedback: supplied.shape === 'unknown' ? 'drawMore' as const
+              : supplied.shape === target ? 'shapeMatched' as const : 'keepTrying' as const,
+          } : classifier.classify(action.drawing, target);
           seen.add(action.submissionId);
           submissions++;
           session.score.countAction();

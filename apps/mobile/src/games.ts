@@ -12,6 +12,10 @@ import type { BannerColorName } from './design/palettes';
 export type Activity = 'drawing' | 'shapes';
 
 export const DRAWING_GAMES = { drawing: freeDrawing, shapes: shapeChallenge } as const;
+/** The canvas guides four shapes; its strokes feed this headless recognition game. */
+export const SHAPE_CHALLENGE_GAME = createShapeRecognitionGame({
+  targets: ['circle', 'triangle', 'square', 'rectangle'],
+});
 
 export const TIMED_PRACTICE_SECONDS = TIMED_PRACTICE_DURATIONS_MS.map((ms) => ms / 1000);
 const timedPractice = new Map<number, ReturnType<typeof createTimedPractice>>(
@@ -123,10 +127,10 @@ export const PLAY_SHELF: readonly ShelfGame[] = [
   },
   {
     id: 'shapes', title: 'Shape Challenge', art: 'shapes', color: 'butter', uses: 'touch', stat: 'best',
-    tagline: 'Trace the circle at your own pace.',
-    howTo: 'Follow the dotted circle with your finger or the stylus. Take your time: every try earns points, '
-      + 'and you can undo and try again.',
+    tagline: 'Draw four shapes at your own pace.',
+    howTo: 'Follow the dotted circle, triangle, square and rectangle with your finger or the stylus. Take your '
+      + 'time: every try earns points, and you can undo and try again.',
     options: [],
-    scoreGameId: () => shapeChallenge.id,
+    scoreGameId: () => SHAPE_CHALLENGE_GAME.id,
   },
 ];

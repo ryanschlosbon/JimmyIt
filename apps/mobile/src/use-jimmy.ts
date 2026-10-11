@@ -5,6 +5,7 @@ import { BADGE_VISUALS } from './badge-visuals';
 import { AI_MODELS, DEFAULT_AI_SETTINGS, createConfiguredAIService, registerGeminiKey,
   removeGeminiKey, type AISettings } from './ai-service';
 import { GAME_CATALOG } from './games';
+import { registerShapeKey, removeShapeKey } from './shape-recognition-service';
 import { DEFAULT_COLOR_STYLE, isColorStyleId, type ColorStyleId } from './design/palettes';
 
 /** Where appearance choices are saved on the device. */
@@ -35,6 +36,7 @@ export function useJimmy() {
   const [aiSettings, setAISettingsState] = useState<AISettings>(DEFAULT_AI_SETTINGS);
   const [aiConnection, setAIConnection] = useState<'unchecked' | 'checking' | 'ready' | 'unavailable'>('unchecked');
   const [aiSessionToken, setAISessionToken] = useState<string | undefined>();
+  const [shapeSessionToken, setShapeSessionToken] = useState<string | undefined>();
   const [localError, setLocalError] = useState<string | null>(null);
   const [calibration, setCalibration] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
@@ -82,6 +84,17 @@ export function useJimmy() {
     setAISessionToken(undefined);
     setAIConnection('unchecked');
     if (token) await removeGeminiKey(token);
+  };
+  const saveShapeKey = async (apiKey: string): Promise<void> => {
+    const token = await registerShapeKey(apiKey);
+    const previous = shapeSessionToken;
+    setShapeSessionToken(token);
+    if (previous) await removeShapeKey(previous).catch(() => undefined);
+  };
+  const clearShapeKey = async (): Promise<void> => {
+    const token = shapeSessionToken;
+    setShapeSessionToken(undefined);
+    if (token) await removeShapeKey(token);
   };
   const setAISettings = (next: AISettings) => {
     setAISettingsState(next);
@@ -140,6 +153,7 @@ export function useJimmy() {
     colorStyle, setColorStyle,
     aiSettings, setAISettings, aiConnection, testAIConnection, aiService,
     hasGeminiKey: aiSessionToken !== undefined, saveGeminiKey, clearGeminiKey,
+    shapeSessionToken, saveShapeKey, clearShapeKey,
     ready: appearanceReady && !scores.loading,
     error,
     setError: (message: string | null) => { setLocalError(message); if (message === null) connection.clearError(); },

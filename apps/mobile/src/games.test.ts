@@ -1,6 +1,7 @@
 import { createAppScoreRecord, type ScoreRecord } from '@jimmyit/core';
 import { describe, expect, it } from 'vitest';
-import { DRAWING_GAMES, GAME_CATALOG, tapQuestGame, TIMED_PRACTICE_SECONDS, timedPracticeGame } from './games';
+import { DRAWING_GAMES, GAME_CATALOG, PLAY_SHELF, SHAPE_CHALLENGE_GAME, tapQuestGame,
+  TIMED_PRACTICE_SECONDS, timedPracticeGame } from './games';
 
 function tapQuestRecord(mode: string, metrics: Record<string, number>, minutesAgo: number): ScoreRecord {
   return createAppScoreRecord({
@@ -10,6 +11,28 @@ function tapQuestRecord(mode: string, metrics: Record<string, number>, minutesAg
 }
 
 describe('game registry', () => {
+  it('plays circle, triangle, square, and rectangle locally before saving one record', async () => {
+    const { createGameTestHarness } = await import('@jimmyit/game-sdk/testing');
+    const h = await createGameTestHarness(SHAPE_CHALLENGE_GAME, { toy: false });
+    const circle = Array.from({ length: 37 }, (_, index) => ({
+      x: 500 + 200 * Math.cos(index * 2 * Math.PI / 36),
+      y: 325 + 200 * Math.sin(index * 2 * Math.PI / 36),
+    }));
+    const drawings = [circle,
+      [{ x: 500, y: 100 }, { x: 760, y: 540 }, { x: 240, y: 540 }, { x: 500, y: 100 }],
+      [{ x: 290, y: 115 }, { x: 710, y: 115 }, { x: 710, y: 535 }, { x: 290, y: 535 }, { x: 290, y: 115 }],
+      [{ x: 200, y: 180 }, { x: 800, y: 180 }, { x: 800, y: 480 }, { x: 200, y: 480 }, { x: 200, y: 180 }],
+    ];
+    for (const [index, points] of drawings.entries()) {
+      expect(h.run.getState().target).toBe(['circle', 'triangle', 'square', 'rectangle'][index]);
+      h.run.submit({ type: 'submitDrawing', submissionId: String(index),
+        drawing: { width: 1000, height: 650, strokes: [points] } });
+      expect(h.run.getState().matchedCount).toBe(index + 1);
+    }
+    const record = await h.run.result;
+    expect(record).toMatchObject({ completed: true, metrics: { matchedShapes: 4, drawingSubmissions: 4 } });
+    expect(await h.repository.list({ gameId: 'shape-recognition' })).toEqual([record]);
+  });
   it('lists every app game and every toy game, once each', () => {
     const ids = GAME_CATALOG.map(game => game.id);
     expect(ids).toEqual([
@@ -27,6 +50,11 @@ describe('game registry', () => {
     expect(timedPracticeGame(60_000)).toMatchObject({ id: 'timed-motor-practice', durationMs: 60_000 });
     expect(timedPracticeGame(60_000)).toBe(timedPracticeGame(60_000));
     expect(DRAWING_GAMES.shapes.id).toBe('shape-challenge');
+  });
+
+  it('shows the Shape Challenge banner the score of the game its screen plays', () => {
+    const shapes = PLAY_SHELF.find(game => game.id === 'shapes');
+    expect(shapes?.scoreGameId(null)).toBe(SHAPE_CHALLENGE_GAME.id);
   });
 });
 

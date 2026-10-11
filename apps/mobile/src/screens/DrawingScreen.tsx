@@ -6,6 +6,7 @@ import { DrawingCanvas } from '../components/DrawingCanvas';
 import type { Theme } from '../theme';
 import type { Activity } from '../games';
 import type { DrawingAction, Stroke } from '@jimmyit/game-drawing';
+import type { TargetShape } from '@jimmyit/game-shape-recognition';
 
 const PALETTE = [
   { name: 'Ocean blue', color: '#3387D6' }, { name: 'Coral', color: '#D85E57' },
@@ -14,9 +15,12 @@ const PALETTE = [
   { name: 'Mint green', color: '#348F6B' }, { name: 'Slate', color: '#8095AB' },
 ] as const;
 
-export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving }: {
+export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving,
+  shapeFeedback, shapeTarget = 'circle', shapeIndex = 0, shapeCount = 4 }: {
   readonly theme: Theme; readonly activity: Activity; readonly strokes: readonly Stroke[];
   readonly dispatch: (action: DrawingAction) => void; readonly finish: () => void; readonly saving: boolean;
+  readonly shapeFeedback?: 'shapeMatched' | 'keepTrying' | 'drawMore';
+  readonly shapeTarget?: TargetShape; readonly shapeIndex?: number; readonly shapeCount?: number;
 }) {
   const { width } = useWindowDimensions();
   const compact = width < 750;
@@ -26,7 +30,8 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
   const shapes = activity === 'shapes';
   return <View style={{ gap: 24 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
-      <View style={{ gap: 7 }}><Eyebrow theme={theme}>{shapes ? 'Play & practice' : 'Your imagination lives here'}</Eyebrow>
+      <View style={{ gap: 7 }}><Eyebrow theme={theme}>{shapes
+        ? `Shape ${Math.min(shapeIndex + 1, shapeCount)} of ${shapeCount}` : 'Your imagination lives here'}</Eyebrow>
         <Heading theme={theme} level={1} size={compact ? 36 : 44}>{shapes ? 'Shape Challenge' : 'Drawing with Jimmy'}</Heading></View>
       {!compact && <View style={{ backgroundColor: theme.softMint, padding: 14, borderRadius: 15,
         flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -38,9 +43,13 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
       flexDirection: 'row', alignItems: 'center', gap: 13 }}>
       <Icon name={shapes ? 'shapes' : 'sparkle'} color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
-        {shapes ? 'Can you follow the circle? Take your time — every little try counts.'
+        {shapes ? `Can you follow the ${shapeTarget}? Take your time — every little try counts.`
           : 'Pick a color. Make your mark. There’s no wrong way to create!'}
-      </Body></View>
+      </Body>{shapes && shapeFeedback && <Body theme={theme} small color={theme.text}>
+        {shapeFeedback === 'shapeMatched' ? `Lovely ${shapeTarget}!` : shapeFeedback === 'drawMore'
+          ? `Add a little more to your ${shapeTarget} and try again.`
+          : `Nice try! Give the ${shapeTarget} another go.`}
+      </Body>}</View>
     </View>
     <View style={{ backgroundColor: theme.surface, borderRadius: 28, padding: compact ? 14 : 24,
       borderWidth: 1.5, borderColor: theme.border, gap: 20 }}>
@@ -69,7 +78,7 @@ export function DrawingScreen({ theme, activity, strokes, dispatch, finish, savi
             <Body theme={theme} small>{strokes.length === 0 ? 'A fresh start' : `${strokes.length} little marks`}</Body>
           </View>
           <DrawingCanvas strokes={strokes} dispatch={dispatch} color={color} brushSize={brushSize}
-            shapes={shapes} dark={theme.dark} disabled={saving} />
+            shapes={shapes} shapeTarget={shapeTarget} dark={theme.dark} disabled={saving} />
         </View>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
