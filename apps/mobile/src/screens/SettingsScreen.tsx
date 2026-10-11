@@ -31,9 +31,6 @@ export function SettingsScreen({ theme, state, replayIntro }: {
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const previewSeed = useRef(0);
   const [recommendation, setRecommendation] = useState<PersonalizationRecommendation | null>(null);
-  const [keyDraft, setKeyDraft] = useState('');
-  const [keyBusy, setKeyBusy] = useState(false);
-  const [keyMessage, setKeyMessage] = useState<string | null>(null);
   const [shapeKeyDraft, setShapeKeyDraft] = useState('');
   const [shapeKeyBusy, setShapeKeyBusy] = useState(false);
   const [shapeKeyMessage, setShapeKeyMessage] = useState<string | null>(null);
@@ -51,24 +48,6 @@ export function SettingsScreen({ theme, state, replayIntro }: {
   };
   const updateAI = (changes: Partial<typeof ai>) => state.setAISettings({ ...ai, ...changes });
   const boardSize = Math.max(220, Math.min(320, width - 100));
-  const saveKey = () => {
-    if (keyBusy || !keyDraft.trim()) return;
-    setKeyBusy(true);
-    setKeyMessage(null);
-    state.saveGeminiKey(keyDraft.trim()).then(() => {
-      setKeyDraft('');
-      setKeyMessage('Key saved for this preview session. You can test the connection now.');
-    }).catch(() => setKeyMessage('Could not reach the local AI service. Start it and try again.'))
-      .finally(() => setKeyBusy(false));
-  };
-  const removeKey = () => {
-    if (keyBusy) return;
-    setKeyBusy(true);
-    setKeyDraft('');
-    state.clearGeminiKey().then(() => setKeyMessage('Key removed from this session.'))
-      .catch(() => setKeyMessage('Key cleared here. The local service will expire its copy.'))
-      .finally(() => setKeyBusy(false));
-  };
   const saveShapeKey = () => {
     if (shapeKeyBusy || !shapeKeyDraft.trim()) return;
     setShapeKeyBusy(true);
@@ -97,8 +76,7 @@ export function SettingsScreen({ theme, state, replayIntro }: {
       accessibilityPreferences: defaultAccessibilityPreferences(), targetCount: 4,
       variationSeed: previewSeed.current,
       availableInputControls: previewType === 'memoryQuest' ? ['clicker'] : ['screenTouch'] })
-      .then(level => { setPreview(level); setPreviewMessage(level.source === 'gemini'
-        ? 'Gemini generated this activity.' : 'Generated offline on this device.'); })
+      .then(level => { setPreview(level); setPreviewMessage('Generated on this device.'); })
       .catch(() => { setPreview(null); setPreviewMessage('Could not make an activity yet. Try again.'); })
       .finally(() => setPreviewBusy(false));
   };
@@ -247,25 +225,9 @@ export function SettingsScreen({ theme, state, replayIntro }: {
       <View style={{ gap: 5 }}><Eyebrow theme={theme}>OPTIONAL ACTIVITY IDEAS</Eyebrow>
         <Heading theme={theme} size={30}>AI play settings</Heading>
         <Body theme={theme} small>Offline activities work without an account, a key, or the internet.</Body></View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        <Button theme={theme} label="Offline generator" selected={ai.provider === 'offline'}
-          onPress={() => updateAI({ provider: 'offline', generationEnabled: false })} />
-        <Button theme={theme} label="Gemini API" selected={ai.provider === 'gemini'}
-          onPress={() => updateAI({ provider: 'gemini' })} />
-      </View>
-      <Button theme={theme} label={ai.generationEnabled ? 'AI game generation on' : 'AI game generation off'}
-        selected={ai.generationEnabled} onPress={() => updateAI({ generationEnabled: !ai.generationEnabled })} />
       <Button theme={theme} label={ai.personalizationEnabled ? 'Activity suggestions on' : 'Activity suggestions off'}
         selected={ai.personalizationEnabled}
         onPress={() => updateAI({ personalizationEnabled: !ai.personalizationEnabled })} />
-      <View style={{ gap: 8 }}><Heading theme={theme} size={23}>Gemini model</Heading>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          <Button theme={theme} label="3.8 Flash" selected={ai.model === 'gemini-3.8-flash'}
-            onPress={() => updateAI({ model: 'gemini-3.8-flash' })} />
-          <Button theme={theme} label="3.5 Flash-Lite" selected={ai.model === 'gemini-3.5-flash-lite'}
-            onPress={() => updateAI({ model: 'gemini-3.5-flash-lite' })} />
-        </View>
-      </View>
       <View style={{ gap: 8 }}><Heading theme={theme} size={23}>Hugging Face key for Shape Quest</Heading>
         <TextInput editable={!shapeKeyBusy} secureTextEntry value={shapeKeyDraft} onChangeText={setShapeKeyDraft}
           autoCapitalize="none" autoCorrect={false} placeholder="Paste your Hugging Face token"
@@ -284,30 +246,6 @@ export function SettingsScreen({ theme, state, replayIntro }: {
           (state.shapeSessionToken ? 'A shape key is ready for this session.' :
             'Without a key, Shape Quest recognizes drawings on this device.')}</Body></View>
       </View>
-      <View style={{ gap: 8 }}><Heading theme={theme} size={23}>Gemini API key</Heading>
-        <TextInput editable={!keyBusy} secureTextEntry value={keyDraft} onChangeText={setKeyDraft}
-          autoCapitalize="none" autoCorrect={false} placeholder="Tap here and paste your Gemini key"
-          accessibilityLabel="Gemini API key" style={{ borderWidth: 1.5,
-            borderColor: theme.border, borderRadius: RADIUS.sm, padding: SPACE.lg, color: theme.text,
-            minHeight: SIZE.touchTarget, fontFamily: FONTS.body, fontSize: TYPE.small }} />
-        <Body theme={theme} small>This local preview sends your key to the AI service on this computer. It stays in
-          memory for up to 30 minutes and is never saved with your app settings. Paste into the field, then save.</Body>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          <Button theme={theme} label={keyBusy ? 'Saving…' : 'Save key for this session'}
-            onPress={saveKey} disabled={keyBusy || !keyDraft.trim()} />
-          <Button theme={theme} label="Remove key" onPress={removeKey} disabled={keyBusy || !state.hasGeminiKey} />
-        </View>
-        <View accessibilityLiveRegion="polite"><Body theme={theme} small>{keyMessage ??
-          (state.hasGeminiKey ? 'A key is ready for this session.' : 'No key saved for this session.')}</Body></View>
-      </View>
-      <Button theme={theme} label={state.aiConnection === 'checking' ? 'Checking connection…' : 'Test AI connection'}
-        onPress={state.testAIConnection} disabled={!ai.generationEnabled || ai.provider !== 'gemini' ||
-          state.aiConnection === 'checking'} />
-      <View accessibilityLiveRegion="polite"><Body theme={theme} small>
-        {state.aiConnection === 'ready' ? 'AI service ready.' : state.aiConnection === 'unavailable'
-          ? 'AI service unavailable. Offline activities are still ready.' :
-          'Gemini needs a trusted AI service and an explicit opt-in. Only activity settings are sent when it is used.'}
-      </Body></View>
       <View style={{ backgroundColor: theme.raised, borderRadius: 18, padding: 18, gap: 12 }}>
         <Heading theme={theme} size={24}>Try an activity idea</Heading>
         <Body theme={theme} small>Choose a type, then make a sample level. This preview does not save a score.</Body>

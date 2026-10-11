@@ -9,8 +9,6 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@google/genai": "^2.28.0",
-    "@jimmyit/ai": "*",
     "@jimmyit/game-shape-recognition": "*"
   }
 }
