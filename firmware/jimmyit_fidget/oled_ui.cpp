@@ -7,6 +7,9 @@
 #include <math.h>
 #include <string.h>
 
+#include "src/boot_animation.h"
+#include "src/jimmy_face.h"
+#include "src/raster.h"
 #include "src/result_animation.h"
 
 namespace {
@@ -59,74 +62,6 @@ void centeredOn(const char* text, uint8_t size, int16_t centerX, int16_t y) {
   const int16_t width = static_cast<int16_t>(strlen(text) * 6 * size);
   display.setCursor(centerX - width / 2, y);
   display.print(text);
-}
-
-// Adafruit GFX has circles but no ellipses: one horizontal line per row.
-void fillEllipse(int16_t cx, int16_t cy, int16_t rx, int16_t ry, uint16_t color) {
-  for (int16_t dy = -ry; dy <= ry; dy++) {
-    const float t = static_cast<float>(dy) / static_cast<float>(ry);
-    const int16_t half = static_cast<int16_t>(lroundf(static_cast<float>(rx) * sqrtf(1.0f - t * t)));
-    display.drawFastHLine(cx - half, cy + dy, half * 2 + 1, color);
-  }
-}
-
-// Jimmy's face, after the app's Jimmy: a solid round head, ring eyes with the pupils looking right (or, squinting,
-// two happy arches), and a sideways smile with the tongue out. Drawn in black on a white head, tipped by tiltDeg
-// around its center. Shapes are in "face units" from the 910-pixel reference art, scaled to the radius.
-void drawJimmy(int16_t cx, int16_t cy, float tiltDeg, bool squint) {
-  constexpr int16_t r = jimmyit::ResultAnimation::kJimmyRadius;
-  constexpr float unit = static_cast<float>(r) / 455.0f;  // reference art: 910 px across, centered on 455
-  const float radians = tiltDeg * 3.14159265f / 180.0f;
-  const float c = cosf(radians);
-  const float s = sinf(radians);
-  // Reference-art point → screen pixel, rotated about the face's center.
-  const auto px = [&](float x, float y) {
-    const float fx = (x - 455.0f) * unit;
-    const float fy = (y - 455.0f) * unit;
-    return static_cast<int16_t>(cx + lroundf(fx * c - fy * s));
-  };
-  const auto py = [&](float x, float y) {
-    const float fx = (x - 455.0f) * unit;
-    const float fy = (y - 455.0f) * unit;
-    return static_cast<int16_t>(cy + lroundf(fx * s + fy * c));
-  };
-  // A two-pixel-thick black line through reference-art points.
-  const auto stroke = [&](const float (*points)[2], int count) {
-    for (int i = 1; i < count; i++) {
-      const int16_t x0 = px(points[i - 1][0], points[i - 1][1]);
-      const int16_t y0 = py(points[i - 1][0], points[i - 1][1]);
-      const int16_t x1 = px(points[i][0], points[i][1]);
-      const int16_t y1 = py(points[i][0], points[i][1]);
-      display.drawLine(x0, y0, x1, y1, SSD1306_BLACK);
-      display.drawLine(x0, y0 + 1, x1, y1 + 1, SSD1306_BLACK);
-    }
-  };
-
-  display.fillCircle(cx, cy, r, SSD1306_WHITE);
-  const int16_t ringRadius = static_cast<int16_t>(lroundf(122.0f * unit));
-  const int16_t pupilRx = static_cast<int16_t>(lroundf(95.0f * unit));
-  const int16_t pupilRy = static_cast<int16_t>(lroundf(110.0f * unit));
-  static const float kEyeX[] = {262.0f, 650.0f};
-  for (const float eyeX : kEyeX) {
-    if (squint) {
-      // Eyes squeezed into a smile: an arch (∩) where the ring was.
-      float arch[7][2];
-      for (int k = 0; k < 7; k++) {
-        const float angle = (195.0f + 150.0f * static_cast<float>(k) / 6.0f) * 3.14159265f / 180.0f;
-        arch[k][0] = eyeX + 110.0f * cosf(angle);
-        arch[k][1] = 440.0f + 110.0f * sinf(angle);
-      }
-      stroke(arch, 7);
-      continue;
-    }
-    display.drawCircle(px(eyeX, 415.0f), py(eyeX, 415.0f), ringRadius, SSD1306_BLACK);
-    fillEllipse(px(eyeX + 31.0f, 415.0f), py(eyeX + 31.0f, 415.0f), pupilRx, pupilRy, SSD1306_BLACK);
-  }
-  static const float kSmile[][2] = {{295, 622}, {330, 665}, {380, 688}, {430, 690}, {480, 678}, {525, 645}, {560, 585}};
-  static const float kTongue[][2] = {{470, 688}, {520, 720}, {590, 740}, {645, 725}, {665, 690}, {640, 640},
-                                     {600, 610}, {560, 588}};
-  stroke(kSmile, 7);
-  stroke(kTongue, 8);
 }
 
 // A plus-shaped sparkle; tiny ones are a single dot.
@@ -206,6 +141,12 @@ void uiPoints(uint32_t points, bool linked, float graceRemaining) {
   }
 }
 
+void uiBoot(uint32_t elapsedMs) {
+  begin();
+  jimmyit::Raster raster(display.getBuffer());
+  jimmyit::BootAnimation::draw(raster, elapsedMs);
+}
+
 void uiResult(uint32_t points, bool newBest, uint32_t elapsedMs) {
   begin();
   display.setTextWrap(false);
@@ -221,7 +162,8 @@ void uiResult(uint32_t points, bool newBest, uint32_t elapsedMs) {
   if (newBest) centeredOn("NEW BEST!", 1, f.scoreCenterX, 55);
 
   if (!f.showJimmy) return;
-  drawJimmy(f.jimmyX, f.jimmyY, f.tiltDeg, f.squint);
+  jimmyit::Raster raster(display.getBuffer());
+  jimmyit::drawJimmyFace(raster, f.jimmyX, f.jimmyY, jimmyit::ResultAnimation::kJimmyRadius, f.tiltDeg, f.squint);
   if (f.burst) {
     // Eight sparkles fly out from where he landed, shrinking to dots as they go.
     const float distance = jimmyit::ResultAnimation::kJimmyRadius + 3.0f + 10.0f * f.burstProgress;

@@ -8,12 +8,20 @@ flash storage, game sessions, spinner and screw scoring, and haptics.
 
 ## How the toy plays without the app
 
+**Boot animation** (`src/boot_animation.cpp`, 4 s, a press skips it): the
+"JimmyIt" wordmark wipes in, Jimmy (52 px across) rolls in from the right and
+knocks it off the screen, smiles, then rolls away to the left trailing five
+pill-shaped stripes, after the app's intro. It draws straight into the OLED's
+frame buffer with `src/raster.*`, so the same code renders host previews:
+build `firmware/test`'s sources with a small main that calls
+`BootAnimation::draw` per frame.
+
 ```
-power on → WELCOME (5 s) → INSTRUCTIONS (10 s) → READY ──first move──► PLAYING ──2 s, no move──► GRACE (1 s) ──no move──► RESULT (4.2 s) ─┐
-           (a press skips either)                  ▲                   +10 per press  ◄─a move── bar runs down            score, then     │
-                                                   │                   +5 per ¼ turn                                      Jimmy hops      │
-                                                   │ "MAKE A MOVE TO START!"          milestones: 100, 500, 1000…                         │
-                                                   └──────────────────────────────────────────────────────────────────────────────────────┘
+power on → BOOT (4 s) → WELCOME (5 s) → INSTRUCTIONS (10 s) → READY ──first move──► PLAYING ──2 s, no move──► GRACE (1 s) ──no move──► RESULT (4.2 s) ─┐
+                        (a press skips any)                   ▲                   +10 per press  ◄─a move── bar runs down            score, then     │
+                                                                │                   +5 per ¼ turn                                      Jimmy hops      │
+                                                                │ "MAKE A MOVE TO START!"          milestones: 100, 500, 1000…                         │
+                                                                └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Free Play is the default game.** On READY it waits; the child's first move
@@ -120,6 +128,10 @@ they're written to flash after every game, so turning the toy off loses nothing.
 | `jimmyit_fidget/src/input_helpers.*`  | Debouncer, spinner wrap tracking, encoder decoding          | host |
 | `jimmyit_fidget/src/score_events.*`   | When score moments happen (same rules as the app)           | host |
 | `jimmyit_fidget/src/celebration.*`    | Animation length, priority and haptic for each moment       | host |
+| `jimmyit_fidget/src/boot_animation.*` | The boot animation's timeline and drawing                    | host |
+| `jimmyit_fidget/src/jimmy_face.*`     | Jimmy's face (after the app's art) at any size, tilted or rolling | host |
+| `jimmyit_fidget/src/raster.*`         | Drawing straight into the OLED's frame buffer (SSD1306 layout) | host |
+| `jimmyit_fidget/src/wordmark_bitmap.h` | The "JimmyIt" wordmark, generated from the app's artwork     | — |
 | `jimmyit_fidget/src/result_animation.*` | The result screen's timeline: score, Jimmy's roll-in, smile, hop and landing | host |
 | `jimmyit_fidget/src/haptic_feedback.*` | Which switches tap, rumble strength from turning speed     | host |
 | `jimmyit_fidget/src/connection_approval.*` | The "connect?" question, timeouts, remembered phones   | host |
