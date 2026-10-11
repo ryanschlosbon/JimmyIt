@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",
+    "evaluate:shapes": "tsx src/evaluate-shapes.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",
-    "@jimmyit/ai": "*"
+    "@jimmyit/ai": "*",
+    "@jimmyit/game-shape-recognition": "*"
   }
 }

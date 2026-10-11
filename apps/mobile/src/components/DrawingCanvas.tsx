@@ -2,10 +2,12 @@ import { useRef, useState } from 'react';
 import { View, type GestureResponderEvent, type LayoutRectangle } from 'react-native';
 import Svg, { Circle, Path, Rect, Pattern, Defs } from 'react-native-svg';
 import { strokeToPath, type DrawingAction, type Stroke } from '@jimmyit/game-drawing';
+import type { TargetShape } from '@jimmyit/game-shape-recognition';
 
-export function DrawingCanvas({ strokes, dispatch, color, brushSize, shapes, dark, disabled }: {
+export function DrawingCanvas({ strokes, dispatch, color, brushSize, shapes, shapeTarget = 'circle', dark, disabled }: {
   readonly strokes: readonly Stroke[]; readonly dispatch: (action: DrawingAction) => void;
   readonly color: string; readonly brushSize: number; readonly shapes: boolean; readonly dark: boolean;
+  readonly shapeTarget?: TargetShape;
   readonly disabled: boolean;
 }) {
   const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
@@ -14,7 +16,8 @@ export function DrawingCanvas({ strokes, dispatch, color, brushSize, shapes, dar
     x: Math.max(0, Math.min(1000, event.nativeEvent.locationX / layout.width * 1000)),
     y: Math.max(0, Math.min(650, event.nativeEvent.locationY / layout.height * 650)),
   });
-  return <View nativeID="drawing-canvas" accessible accessibilityLabel={shapes ? 'Drawing canvas. Follow the dotted circle with your finger or pen.'
+  return <View nativeID="drawing-canvas" accessible accessibilityLabel={shapes
+    ? `Drawing canvas. Follow the dotted ${shapeTarget} with your finger or pen.`
     : 'Drawing canvas. Draw with your finger, pen, or mouse.'}
     onLayout={event => setLayout(event.nativeEvent.layout)}
     onStartShouldSetResponder={() => !disabled} onMoveShouldSetResponder={() => !disabled && drawing.current}
@@ -33,8 +36,14 @@ export function DrawingCanvas({ strokes, dispatch, color, brushSize, shapes, dar
         <Circle cx="18" cy="18" r="1.4" fill={dark ? '#2E4A73' : '#E9EEEE'} />
       </Pattern></Defs>
       <Rect width="1000" height="650" fill="url(#dots)" />
-      {shapes && <Circle cx="500" cy="325" r="210" stroke={dark ? '#B8C4D6' : '#8798A8'}
-        strokeWidth="4" strokeDasharray="10 14" fill="none" />}
+      {shapes && shapeTarget === 'circle' && <Circle cx="500" cy="325" r="210"
+        stroke={dark ? '#B8C4D6' : '#8798A8'} strokeWidth="4" strokeDasharray="10 14" fill="none" />}
+      {shapes && shapeTarget === 'triangle' && <Path d="M 500 100 L 760 540 L 240 540 Z"
+        stroke={dark ? '#B8C4D6' : '#8798A8'} strokeWidth="4" strokeDasharray="10 14" fill="none" />}
+      {shapes && shapeTarget === 'square' && <Rect x="290" y="115" width="420" height="420"
+        stroke={dark ? '#B8C4D6' : '#8798A8'} strokeWidth="4" strokeDasharray="10 14" fill="none" />}
+      {shapes && shapeTarget === 'rectangle' && <Rect x="200" y="180" width="600" height="300"
+        stroke={dark ? '#B8C4D6' : '#8798A8'} strokeWidth="4" strokeDasharray="10 14" fill="none" />}
       {strokes.map((stroke, index) => <Path key={index} d={strokeToPath(stroke)} stroke={stroke.color}
         strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" fill="none" />)}
     </Svg>
