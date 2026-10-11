@@ -5,7 +5,7 @@
 // `bannerArt` in artwork.ts.
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 
-export type GameArtName = 'stopwatch' | 'target' | 'brush' | 'shapes';
+export type GameArtName = 'stopwatch' | 'target' | 'brush' | 'shapes' | 'rhythm' | 'dualKnobs';
 
 export function GameArt({ name, size, ink, accent, shadow }: {
   readonly name: GameArtName; readonly size: number; readonly ink: string; readonly accent: string;
@@ -54,6 +54,25 @@ export function GameArt({ name, size, ink, accent, shadow }: {
       <Rect x="56" y="14" width="30" height="30" rx="7" fill={accent} stroke={ink} strokeWidth={5}
         transform="rotate(12 71 29)" />
       <Polygon points="68,52 86,80 50,80" fill="none" stroke={ink} strokeWidth={5} strokeLinejoin="round" />
+    </>}
+    {name === 'rhythm' && <>
+      <Ellipse cx="50" cy="90" rx="34" ry="3.2" fill={shadow} />
+      <Line x1="10" y1="55" x2="90" y2="55" stroke={ink} strokeWidth={5} strokeLinecap="round" />
+      <Circle cx="32" cy="55" r="20" fill={accent} stroke={ink} strokeWidth={5} />
+      <Circle cx="26" cy="51" r="2.5" fill={ink} /><Circle cx="38" cy="51" r="2.5" fill={ink} />
+      <Path d="M25 61q7 8 14 0" {...line} strokeWidth={3} />
+      <Circle cx="72" cy="55" r="12" fill="none" stroke={ink} strokeWidth={5} />
+      <Line x1="70" y1="20" x2="70" y2="31" {...line} />
+      <Line x1="77" y1="16" x2="77" y2="27" {...line} />
+    </>}
+    {name === 'dualKnobs' && <>
+      <Ellipse cx="50" cy="90" rx="34" ry="3.2" fill={shadow} />
+      <Path d="M14 72h21V59h28V47h23" {...line} />
+      <Circle cx="30" cy="33" r="15" fill={accent} stroke={ink} strokeWidth={5} />
+      <Circle cx="72" cy="31" r="15" fill="none" stroke={ink} strokeWidth={5} />
+      <Line x1="30" y1="33" x2="30" y2="23" {...line} />
+      <Line x1="72" y1="31" x2="81" y2="27" {...line} />
+      <Path d="M46 58l4-7 4 7Z" fill={accent} stroke={ink} strokeWidth={3} strokeLinejoin="round" />
     </>}
   </Svg>;
 }

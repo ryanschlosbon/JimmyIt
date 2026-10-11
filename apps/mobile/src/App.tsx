@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Modal, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
+import { AppState, Modal, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { Baloo2_700Bold } from '@expo-google-fonts/baloo-2/700Bold';
@@ -10,6 +10,12 @@ import { Poppins_600SemiBold } from '@expo-google-fonts/poppins/600SemiBold';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createJimmyServices, JimmyServicesProvider, ToyNotConnectedError, useGameRun } from '@jimmyit/app-kit';
 import { drawingReducer, type DrawingAction, type DrawingGameAction, type DrawingGameState, type Stroke } from '@jimmyit/game-drawing';
+import { createButtonHeroGame, type ButtonHeroAction, type ButtonHeroDifficulty,
+  type ButtonHeroState } from '@jimmyit/game-button-hero';
+import { createKnobQuestGame, type KnobQuestAction, type KnobQuestDifficulty,
+  type KnobQuestState } from '@jimmyit/game-knob-quest';
+import { ButtonHeroView } from '@jimmyit/game-button-hero/view';
+import { KnobQuestView } from '@jimmyit/game-knob-quest/view';
 import type { TimedPracticeState } from '@jimmyit/game-timed-practice';
 import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
 import type { ShapeRecognitionAction, ShapeRecognitionState } from '@jimmyit/game-shape-recognition';
@@ -38,11 +44,14 @@ import type { BannerStat } from './components/GameBanner';
 import { ART, FONTS, RADIUS, SETTINGS, SPACE } from './design/tokens';
 import { Jimmy } from './components/Jimmy';
 import { setupWebAccessibility } from './web-accessibility';
+import { attachGameKeyboard } from './game-keyboard';
+import { dispatchGameInput, type GameInputEvent } from './game-input';
 
-type Screen = 'home' | 'draw' | 'rewards' | 'settings' | 'timed' | 'tapQuest';
+type Screen = 'home' | 'draw' | 'rewards' | 'settings' | 'timed' | 'tapQuest' | 'buttonHero' | 'knobQuest';
 const NO_STROKES: readonly Stroke[] = [];
 /** Game screens reached from the play shelf; the Play tab stays highlighted on them. */
-const isActivity = (screen: Screen) => screen === 'timed' || screen === 'tapQuest';
+const isActivity = (screen: Screen) => screen === 'timed' || screen === 'tapQuest'
+  || screen === 'buttonHero' || screen === 'knobQuest';
 const DRAWING_TICK_MS = 1000; // drawing has no clock to update; tick slowly
 
 /** Calls onSaved once for each saved record, and onFailed when a save fails. */
@@ -88,6 +97,16 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const finishIntro = useCallback(() => setIntroDone(true), []);
   const timed = useGameRun<TimedPracticeState>();
   const tapQuest = useGameRun<TapQuestState, TapQuestAction>();
+  const buttonHero = useGameRun<ButtonHeroState, ButtonHeroAction>();
+  const knobQuest = useGameRun<KnobQuestState, KnobQuestAction>();
+  const gameRuns = useRef({ buttonHero, knobQuest });
+  gameRuns.current = { buttonHero, knobQuest };
+  const handleGameInput = useRef<(event: GameInputEvent) => void>(() => undefined);
+  handleGameInput.current = event => dispatchGameInput(event,
+    action => gameRuns.current.buttonHero.submit(action),
+    action => gameRuns.current.knobQuest.submit(action));
+  const [buttonDifficulty, setButtonDifficulty] = useState<ButtonHeroDifficulty>('normal');
+  const [knobDifficulty, setKnobDifficulty] = useState<KnobQuestDifficulty>('normal');
   const drawingRuns = {
     drawing: useGameRun<DrawingGameState, DrawingGameAction>(),
     shapes: useGameRun<ShapeRecognitionState, ShapeRecognitionAction>(),
@@ -103,9 +122,21 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   const [rewardFrom, setRewardFrom] = useState<'draw' | 'timed' | 'tapQuest'>('draw');
   const scroll = useRef<ScrollView>(null);
   const tapQuestSeed = useRef(0);
+  const knobQuestSeed = useRef(0);
   const { width } = useWindowDimensions();
   const compact = width < 680;
   useEffect(() => setupWebAccessibility(state.dark), [state.dark]);
+  useEffect(() => {
+    if (screen !== 'buttonHero' && screen !== 'knobQuest') return;
+    return attachGameKeyboard(screen, event => handleGameInput.current(event));
+  }, [screen]);
+  useEffect(() => {
+    if (screen !== 'buttonHero') return;
+    const subscription = AppState.addEventListener('change', next => {
+      if (next !== 'active') gameRuns.current.buttonHero.pause();
+    });
+    return () => { subscription.remove(); gameRuns.current.buttonHero.pause(); };
+  }, [screen]);
 
   // The play shelf: which banner is showing, and the option chosen on each banner.
   const [shelfIndex, setShelfIndex] = useState(0);
@@ -230,6 +261,8 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   })) as Record<ShelfGameId, BannerStat>, [state.scoreboard, choices]);
 
   const play = (game: ShelfGameId) => {
+    if (game === 'buttonHero') { navigate('buttonHero'); return; }
+    if (game === 'knobQuest') { navigate('knobQuest'); return; }
     if (game === 'drawing' || game === 'shapes') { start(game); return; }
     if (game === 'timed') {
       navigate('timed');
@@ -300,6 +333,22 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
         {screen === 'tapQuest' && <TapQuestScreen theme={theme} run={tapQuest} onStart={startTapQuest} toy={state.toy}
           mode={tapQuestMode} onMode={mode => choose('tapQuest', mode)} autoStart={tapQuestAutoStart}
           onAutoStarted={() => setTapQuestAutoStart(false)} />}
+        {screen === 'buttonHero' && <ButtonHeroView state={buttonHero.state} status={buttonHero.status}
+          difficulty={buttonDifficulty} theme={theme} onDifficulty={setButtonDifficulty}
+          onStart={() => {
+            buttonHero.start(createButtonHeroGame({ difficulty: buttonDifficulty }), { tickMs: 40 });
+            if (compact) scroll.current?.scrollTo({ y: 300, animated: true });
+          }}
+          onPause={buttonHero.pause} onResume={buttonHero.resume}
+          onButton={action => handleGameInput.current({ ...action, source: 'touch' })} />}
+        {screen === 'knobQuest' && <KnobQuestView state={knobQuest.state} status={knobQuest.status}
+          difficulty={knobDifficulty} theme={theme} onDifficulty={setKnobDifficulty}
+          onStart={() => {
+            knobQuestSeed.current++;
+            knobQuest.start(createKnobQuestGame(undefined, knobDifficulty, knobQuestSeed.current), { tickMs: 40 });
+            scroll.current?.scrollTo({ y: compact ? 220 : 240, animated: true });
+          }}
+          onAxis={action => handleGameInput.current({ ...action, source: 'touch' })} />}
         {screen === 'timed' && <TimedScreen theme={theme} timed={timed} onStart={startTimed}
           durationS={timedMs / 1000} onDuration={seconds => choose('timed', String(seconds * 1000))}
           connected={state.connection === 'connected'} searching={state.connection === 'searching'}

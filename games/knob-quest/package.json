@@ -1,0 +1,8 @@
+{
+  "name": "@jimmyit/game-knob-quest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./view": "./src/KnobQuestView.tsx" },
+  "dependencies": { "@jimmyit/game-sdk": "*" }
+}

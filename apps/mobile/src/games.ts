@@ -3,6 +3,8 @@
 import { createGameCatalog } from '@jimmyit/app-kit';
 import type { ScoreRecord } from '@jimmyit/core';
 import { freeDrawing, shapeChallenge } from '@jimmyit/game-drawing';
+import { createButtonHeroGame } from '@jimmyit/game-button-hero';
+import { createKnobQuestGame } from '@jimmyit/game-knob-quest';
 import { createShapeRecognitionGame } from '@jimmyit/game-shape-recognition';
 import { createTapQuestGame, type Point, type RecentAttempt, type TapQuestMode } from '@jimmyit/game-tap-quest';
 import { createTimedPractice, TIMED_PRACTICE_DURATIONS_MS } from '@jimmyit/game-timed-practice';
@@ -60,10 +62,12 @@ export const GAME_CATALOG = createGameCatalog([
   createTimedPractice(),
   ...TAP_QUEST_MODES.map(({ mode }) => createTapQuestGame({ mode })),
   createShapeRecognitionGame(),
+  createButtonHeroGame(),
+  createKnobQuestGame(),
 ]);
 
 /** The games on the play screen, in shelf order. Each is one banner (see DESIGN.md "Game banners"). */
-export type ShelfGameId = 'timed' | 'tapQuest' | 'drawing' | 'shapes';
+export type ShelfGameId = 'timed' | 'tapQuest' | 'drawing' | 'shapes' | 'buttonHero' | 'knobQuest';
 
 /** A choice shown as a chip on a banner, like a time limit or a mode. */
 export interface ShelfOption {
@@ -132,5 +136,17 @@ export const PLAY_SHELF: readonly ShelfGame[] = [
       + 'time: every try earns points, and you can undo and try again.',
     options: [],
     scoreGameId: () => SHAPE_CHALLENGE_GAME.id,
+  },
+  {
+    id: 'buttonHero', title: 'Button Hero', art: 'rhythm', color: 'rhythm', uses: 'touch', stat: 'best',
+    tagline: 'Press the lane as each note arrives.',
+    howTo: 'Use A, S, D, F on a computer or tap the colorful lane buttons. Every well-timed press earns points.',
+    options: [], scoreGameId: () => 'button-hero-normal',
+  },
+  {
+    id: 'knobQuest', title: 'Knob Quest', art: 'dualKnobs', color: 'quest', uses: 'touch', stat: 'best',
+    tagline: 'Steer with two knobs.',
+    howTo: 'Use arrow keys or touch arrows. Left and right steer; turn faster upward to climb against gravity.',
+    options: [], scoreGameId: () => 'knob-quest',
   },
 ];
