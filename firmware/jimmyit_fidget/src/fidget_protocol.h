@@ -16,12 +16,18 @@ constexpr uint8_t kProtocolVersion = 1;
 constexpr size_t kMaxPayloadBytes = 20;
 constexpr size_t kMaxTextLength = 18;
 constexpr size_t kMaxAppNameLength = 15;
-constexpr uint32_t kPointsPerMilestone = 100;
 constexpr size_t kMaxHapticEffects = 8;
 constexpr uint8_t kMaxHapticEffectId = 123;
 constexpr uint8_t kDisplayLineCount = 4;
 constexpr uint8_t kMaxStars = 3;
 constexpr int32_t kSpinnerCountsPerTurn = 4096;
+// Captive-screw encoder detents per full turn; a quarter turn (one move) is 6.
+constexpr int32_t kScrewDetentsPerTurn = 24;
+// Score events: a milestone at each of these, then every kMilestoneStepAfterLast
+// (same as MILESTONE_SCORES in packages/protocol; see nextMilestoneAfter in score_events.h).
+constexpr uint32_t kMilestoneScores[] = {100, 500, 1000, 1500, 2000, 3000};
+constexpr size_t kMilestoneScoreCount = sizeof(kMilestoneScores) / sizeof(kMilestoneScores[0]);
+constexpr uint32_t kMilestoneStepAfterLast = 1000;
 constexpr uint8_t kBatteryUnknown = 255;
 
 // UUIDs: 59e5XXXX-3be2-4d9c-9607-646ddb5d9770.
@@ -54,6 +60,7 @@ constexpr uint8_t kSliderLow = 6;
 constexpr uint8_t kSliderHigh = 7;
 constexpr uint8_t kStylusStowed = 8;
 // Bit 9 was the shirt-button flap (removed from the toy); reserved, always 0.
+constexpr uint8_t kScrewPush = 10;
 }  // namespace SwitchBit
 
 namespace FidgetMode {

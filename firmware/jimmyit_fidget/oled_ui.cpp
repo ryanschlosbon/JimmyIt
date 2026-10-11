@@ -4,7 +4,10 @@
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 #include <Wire.h>
+#include <math.h>
 #include <string.h>
+
+#include "src/result_animation.h"
 
 namespace {
 
@@ -13,7 +16,9 @@ constexpr int kScreenHeight = 64;
 constexpr int kOledReset = -1;
 constexpr uint8_t kScreenAddress = 0x3C;
 
-Adafruit_SSD1306 display(kScreenWidth, kScreenHeight, &Wire, kOledReset);
+// Leave the bus at 400 kHz after each frame (the library drops it to 100 kHz by default),
+// so the expander and spinner reads between frames stay quick.
+Adafruit_SSD1306 display(kScreenWidth, kScreenHeight, &Wire, kOledReset, 400000UL, 400000UL);
 bool displayOk = false;
 
 void begin() {
@@ -46,6 +51,92 @@ void centered(const char* text, uint8_t size, int16_t y) {
   const int16_t width = static_cast<int16_t>(strlen(text) * 6 * size);
   display.setCursor(width < kScreenWidth ? (kScreenWidth - width) / 2 : 0, y);
   display.print(text);
+}
+
+// Like centered(), on any column; text past the screen's edge is simply clipped.
+void centeredOn(const char* text, uint8_t size, int16_t centerX, int16_t y) {
+  display.setTextSize(size);
+  const int16_t width = static_cast<int16_t>(strlen(text) * 6 * size);
+  display.setCursor(centerX - width / 2, y);
+  display.print(text);
+}
+
+// Adafruit GFX has circles but no ellipses: one horizontal line per row.
+void fillEllipse(int16_t cx, int16_t cy, int16_t rx, int16_t ry, uint16_t color) {
+  for (int16_t dy = -ry; dy <= ry; dy++) {
+    const float t = static_cast<float>(dy) / static_cast<float>(ry);
+    const int16_t half = static_cast<int16_t>(lroundf(static_cast<float>(rx) * sqrtf(1.0f - t * t)));
+    display.drawFastHLine(cx - half, cy + dy, half * 2 + 1, color);
+  }
+}
+
+// Jimmy's face, after the app's Jimmy: a solid round head, ring eyes with the pupils looking right (or, squinting,
+// two happy arches), and a sideways smile with the tongue out. Drawn in black on a white head, tipped by tiltDeg
+// around its center. Shapes are in "face units" from the 910-pixel reference art, scaled to the radius.
+void drawJimmy(int16_t cx, int16_t cy, float tiltDeg, bool squint) {
+  constexpr int16_t r = jimmyit::ResultAnimation::kJimmyRadius;
+  constexpr float unit = static_cast<float>(r) / 455.0f;  // reference art: 910 px across, centered on 455
+  const float radians = tiltDeg * 3.14159265f / 180.0f;
+  const float c = cosf(radians);
+  const float s = sinf(radians);
+  // Reference-art point → screen pixel, rotated about the face's center.
+  const auto px = [&](float x, float y) {
+    const float fx = (x - 455.0f) * unit;
+    const float fy = (y - 455.0f) * unit;
+    return static_cast<int16_t>(cx + lroundf(fx * c - fy * s));
+  };
+  const auto py = [&](float x, float y) {
+    const float fx = (x - 455.0f) * unit;
+    const float fy = (y - 455.0f) * unit;
+    return static_cast<int16_t>(cy + lroundf(fx * s + fy * c));
+  };
+  // A two-pixel-thick black line through reference-art points.
+  const auto stroke = [&](const float (*points)[2], int count) {
+    for (int i = 1; i < count; i++) {
+      const int16_t x0 = px(points[i - 1][0], points[i - 1][1]);
+      const int16_t y0 = py(points[i - 1][0], points[i - 1][1]);
+      const int16_t x1 = px(points[i][0], points[i][1]);
+      const int16_t y1 = py(points[i][0], points[i][1]);
+      display.drawLine(x0, y0, x1, y1, SSD1306_BLACK);
+      display.drawLine(x0, y0 + 1, x1, y1 + 1, SSD1306_BLACK);
+    }
+  };
+
+  display.fillCircle(cx, cy, r, SSD1306_WHITE);
+  const int16_t ringRadius = static_cast<int16_t>(lroundf(122.0f * unit));
+  const int16_t pupilRx = static_cast<int16_t>(lroundf(95.0f * unit));
+  const int16_t pupilRy = static_cast<int16_t>(lroundf(110.0f * unit));
+  static const float kEyeX[] = {262.0f, 650.0f};
+  for (const float eyeX : kEyeX) {
+    if (squint) {
+      // Eyes squeezed into a smile: an arch (∩) where the ring was.
+      float arch[7][2];
+      for (int k = 0; k < 7; k++) {
+        const float angle = (195.0f + 150.0f * static_cast<float>(k) / 6.0f) * 3.14159265f / 180.0f;
+        arch[k][0] = eyeX + 110.0f * cosf(angle);
+        arch[k][1] = 440.0f + 110.0f * sinf(angle);
+      }
+      stroke(arch, 7);
+      continue;
+    }
+    display.drawCircle(px(eyeX, 415.0f), py(eyeX, 415.0f), ringRadius, SSD1306_BLACK);
+    fillEllipse(px(eyeX + 31.0f, 415.0f), py(eyeX + 31.0f, 415.0f), pupilRx, pupilRy, SSD1306_BLACK);
+  }
+  static const float kSmile[][2] = {{295, 622}, {330, 665}, {380, 688}, {430, 690}, {480, 678}, {525, 645}, {560, 585}};
+  static const float kTongue[][2] = {{470, 688}, {520, 720}, {590, 740}, {645, 725}, {665, 690}, {640, 640},
+                                     {600, 610}, {560, 588}};
+  stroke(kSmile, 7);
+  stroke(kTongue, 8);
+}
+
+// A plus-shaped sparkle; tiny ones are a single dot.
+void sparkleAt(int16_t x, int16_t y, bool tiny) {
+  display.drawPixel(x, y, SSD1306_WHITE);
+  if (tiny) return;
+  display.drawPixel(x - 1, y, SSD1306_WHITE);
+  display.drawPixel(x + 1, y, SSD1306_WHITE);
+  display.drawPixel(x, y - 1, SSD1306_WHITE);
+  display.drawPixel(x, y + 1, SSD1306_WHITE);
 }
 
 // Tiny deterministic sparkle positions: same frame, same picture.
@@ -96,7 +187,7 @@ void uiReady(const char* gameTitle, bool showMenuHint, bool linked) {
   }
 }
 
-void uiPoints(uint32_t points, bool linked, int32_t secondsLeft) {
+void uiPoints(uint32_t points, bool linked, float graceRemaining) {
   begin();
   header(linked);
   display.setTextSize(2);
@@ -104,20 +195,42 @@ void uiPoints(uint32_t points, bool linked, int32_t secondsLeft) {
   display.print(points);
   display.println(" PTS");
   display.setTextSize(1);
-  if (secondsLeft >= 0) {
-    display.setCursor(28, 54);
-    display.print("TIME LEFT: ");
-    display.print(secondsLeft);
+  if (graceRemaining >= 0.0f) {
+    // No move for a while: a bar runs down, and a move fills the screen back up.
+    const float share = graceRemaining > 1.0f ? 1.0f : graceRemaining;
+    display.drawRect(14, 52, 100, 10, SSD1306_WHITE);
+    display.fillRect(16, 54, static_cast<int16_t>(96 * share + 0.5f), 6, SSD1306_WHITE);
   } else {
     display.setCursor(22, 54);
     display.println("KEEP PLAYING!");
   }
 }
 
-void uiResult(uint32_t points, bool newBest) {
-  String message = "GREAT PLAYING!\n\nYOU SCORED " + String(points) + " POINTS!";
-  if (newBest) message += "\n\nNEW BEST!";
-  showMessage(message);
+void uiResult(uint32_t points, bool newBest, uint32_t elapsedMs) {
+  begin();
+  display.setTextWrap(false);
+  const jimmyit::ResultFrame f = jimmyit::ResultAnimation::frame(elapsedMs);
+  if (f.fieldSparkles) sparkles(elapsedMs / 120, 14);  // the milestone's sparkles, for the opening beat
+
+  // The score keeps one size the whole time, small enough to fit beside Jimmy once he pushes it aside.
+  char line[12];
+  snprintf(line, sizeof(line), "%lu", static_cast<unsigned long>(points));
+  centeredOn("GREAT GAME!", 1, f.scoreCenterX, 2);
+  centeredOn(line, strlen(line) > 4 ? 2 : 3, f.scoreCenterX, 18);
+  centeredOn("POINTS", 1, f.scoreCenterX, 44);
+  if (newBest) centeredOn("NEW BEST!", 1, f.scoreCenterX, 55);
+
+  if (!f.showJimmy) return;
+  drawJimmy(f.jimmyX, f.jimmyY, f.tiltDeg, f.squint);
+  if (f.burst) {
+    // Eight sparkles fly out from where he landed, shrinking to dots as they go.
+    const float distance = jimmyit::ResultAnimation::kJimmyRadius + 3.0f + 10.0f * f.burstProgress;
+    for (int i = 0; i < 8; i++) {
+      const float angle = (static_cast<float>(i) * 45.0f + 22.5f) * 3.14159265f / 180.0f;
+      sparkleAt(static_cast<int16_t>(f.jimmyX + lroundf(cosf(angle) * distance)),
+                static_cast<int16_t>(f.jimmyY + lroundf(sinf(angle) * distance)), f.burstProgress > 0.7f);
+    }
+  }
 }
 
 void uiApp(const AppDisplay& app) {

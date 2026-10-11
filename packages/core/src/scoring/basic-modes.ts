@@ -25,7 +25,8 @@ export const BASIC_MODES: readonly BasicModeInfo[] = [
     name: 'spinCount',
     gameId: 'fidget-spin-count',
     title: 'Spin Count',
-    starThresholds: [50, 150, 300],
+    // 20 points per full turn: 5, 15 and 30 turns, as when a turn paid 10.
+    starThresholds: [100, 300, 600],
   },
 ];
 

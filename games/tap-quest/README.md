@@ -22,8 +22,8 @@ These centers are checked again against the game's adapted target radius before 
 Adaptation uses the
 last five accuracy and completion rates and changes difficulty by at most one level. It makes no health inference.
 In-game haptics default off; sounds are never required. When the toy is connected, the shared runner sends the
-game's score moments (start, points, every 100, new high score, end) to the toy, which plays its own short animation
-and haptic for each; there is no separate completion haptic. A future accessibility setting that turns all haptics
+game's score moments (start, points, milestones, new high score, end) to the toy, which plays its own short animation
+for each and a haptic for milestones, a new high score and the end; there is no separate completion haptic. A future accessibility setting that turns all haptics
 off would need a toy-side switch (protocol change).
 No cloud service or device connection is needed for the rules (`needsToy: false`).
 The standard game runner saves exactly one `ScoreRecord` per finished run through `ScoreRepository`. Each record

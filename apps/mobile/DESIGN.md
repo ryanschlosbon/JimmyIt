@@ -194,6 +194,26 @@ stylus out of Jimmy and the game will start") and starts as soon as it can.
 3. Teach `play()` in `App.tsx` which screen to open.
 4. Check the banner at 375 × 812, 768 × 1024 and 1280 × 800, in light and dark, and in each color style.
 
+## Game screens fit the window
+
+A game's playable area never needs scrolling: a drag on it must always play,
+and a stylus that scrolls the page instead of drawing is the worst kind of
+frustration. `App.tsx` gives every game screen a fixed stage between the header
+and the bottom edge (no `ScrollView`), with **All games** and the score in one
+row on top. Each game measures the space it gets (`onLayout`), not the window,
+and gives the play area whatever is left:
+
+- Drawing: tools in a sidebar when the stage is wide, in sideways-sliding strips
+  under the canvas when it is tall (`art-layout.ts`).
+- Tap Quest: the board is the biggest square that fits.
+- Timed Run: the timer and the move counters sit side by side when wide.
+- Button Hero and Knob Quest: the track or world takes the leftover height.
+
+Game screens use the slim `ActivityHeader`. Short landscape windows also get
+the compact app header. Rewards and Settings are reading screens and still
+scroll. A new game screen follows the same rule; check it at the sizes in
+"Before you open a PR" and make sure nothing scrolls.
+
 ## Background bubbles (`components/Bubbles.tsx`)
 
 The big brand-colored circles behind every screen.
@@ -226,7 +246,7 @@ grep -rn "ANIMATION(" apps/mobile/src
 | `bubblesFloat` | `Bubbles` | Floating background bubbles |
 | `screenEnter` | `PlayScreen` | Banners fade up when the play screen opens |
 | `introReveal` | `IntroScreen` | A coral iris closes on Jimmy, he hops, then rolls off pulling the screen away in stripes |
-| `scorePop` | `GameScoreBar` | At a score moment the score pops and a "100 points!" / "New best!" chip springs in |
+| `scorePop` | `GameScoreBar` | At a score moment the score pops and a "500 points!" / "New best!" chip springs in |
 | `scoreSparks` | `GameScoreBar` | A one-time burst of sparks off the score at a score moment |
 | `toastSlide` | `CelebrationToast` | A strip slides down for score moments in the toy's own games |
 

@@ -10,6 +10,8 @@ export const HapticEffect = {
   tripleClick: 12,
   strongBuzz: 14,
   sharpTick: 24,
+  /** Long Double Sharp Click Strong 1 - 100%. */
+  longDoubleSharpClick: 37,
   buzz: 47,
 } as const;
 
@@ -24,6 +26,10 @@ export const Feedback = {
   success: [HapticEffect.doubleClick],
   celebrate: [HapticEffect.tripleClick, HapticEffect.strongBuzz],
   nudge: [HapticEffect.sharpTick],
+  /** The child reached a new level: two strong clicks and a strong buzz. */
+  levelUp: [HapticEffect.strongClick, HapticEffect.strongClick, HapticEffect.strongBuzz],
+  /** The child earned a badge: two long, sharp double clicks. */
+  badge: [HapticEffect.longDoubleSharpClick, HapticEffect.longDoubleSharpClick],
 } as const satisfies Record<string, readonly number[]>;
 
 export type FeedbackName = keyof typeof Feedback;

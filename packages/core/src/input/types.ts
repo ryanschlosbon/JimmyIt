@@ -61,6 +61,7 @@ export const INITIAL_FIDGET_STATE: FidgetState = {
     sliderLow: false,
     sliderHigh: false,
     stylusStowed: false,
+    screwPush: false,
   },
   spinner: { angleDeg: 0, totalDeg: 0 },
   screw: { position: 0 },

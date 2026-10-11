@@ -1,5 +1,6 @@
 export * from './constants';
 export * from './uuids';
+export { MILESTONE_SCORES, MILESTONE_STEP_AFTER_LAST, nextMilestoneAfter } from './milestones';
 export { ProtocolError, sanitizeAscii, hexToBytes, bytesToHex } from './bytes';
 export { type InputPacket, decodeInputPacket, encodeInputPacket } from './input-packet';
 export { type Command, type CommandType, encodeCommand, decodeCommand } from './commands';

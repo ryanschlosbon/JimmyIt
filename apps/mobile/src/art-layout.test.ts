@@ -1,26 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { getArtLayout } from './art-layout';
-import { ART, ART_BRUSH_SIZES } from './design/tokens';
+import { getArtSidebar, prefersArtSidebar, toolPanelWidth } from './art-layout';
+import { ART_BRUSH_SIZES, SIZE } from './design/tokens';
 
-describe('art workspace with All games navigation', () => {
-  it.each([1024, 800, 668, 600])('fits every desktop tool in a %i-pixel-high window', height => {
-    const layout = getArtLayout(height, false, 12, ART_BRUSH_SIZES.length);
-    expect(layout.toolsHeight).toBeLessThanOrEqual(layout.canvasHeight);
-    expect(layout.workspaceHeight + ART.viewportChromeHeight).toBeLessThanOrEqual(height);
-    expect(layout.canvasHeight).toBeGreaterThanOrEqual(ART.canvasMinHeight);
+describe('art workspace that fits the screen', () => {
+  it('puts the tools beside the canvas on wide windows and under it on tall ones', () => {
+    expect(prefersArtSidebar(1333, 620)).toBe(true); // tablet landscape
+    expect(prefersArtSidebar(1280, 800)).toBe(true);
+    expect(prefersArtSidebar(800, 1150)).toBe(false); // tablet portrait
+    expect(prefersArtSidebar(375, 700)).toBe(false); // phone
   });
 
-  it('keeps the reference two-column palette when enough height is available', () => {
-    expect(getArtLayout(1024, false, 12, 8).toolColumns).toBe(2);
-    expect(getArtLayout(800, false, 12, 8).toolColumns).toBe(3);
-    expect(getArtLayout(668, false, 12, 8).toolColumns).toBe(4);
-    expect(getArtLayout(600, false, 12, 8).toolColumns).toBe(6);
+  it('uses the narrowest sidebar whose panels fit the height', () => {
+    expect(getArtSidebar(900, 12, ART_BRUSH_SIZES.length).toolColumns).toBe(2);
+    expect(getArtSidebar(620, 12, 8).toolColumns).toBe(3);
+    expect(getArtSidebar(460, 12, 8).toolColumns).toBe(4);
+    expect(getArtSidebar(300, 12, 8).toolColumns).toBe(6);
   });
 
-  it('uses a wide palette on phones and preserves the minimum canvas on very short windows', () => {
-    expect(getArtLayout(812, true, 12, 8).toolColumns).toBe(4);
-    const short = getArtLayout(320, false, 12, 8);
-    expect(short.canvasHeight).toBeGreaterThanOrEqual(ART.canvasMinHeight);
-    expect(short.toolsHeight).toBeLessThanOrEqual(short.canvasHeight);
+  it('always fits the chosen panels when there is room for them', () => {
+    for (const height of [300, 460, 620, 900]) {
+      const sidebar = getArtSidebar(height, 12, 8);
+      if (sidebar.toolColumns < 6) expect(sidebar.toolsHeight).toBeLessThanOrEqual(height);
+      expect(sidebar.sidebarWidth).toBe(toolPanelWidth(sidebar.toolColumns));
+      expect(sidebar.sidebarWidth).toBeGreaterThanOrEqual(sidebar.toolColumns * SIZE.touchTarget);
+    }
   });
 });

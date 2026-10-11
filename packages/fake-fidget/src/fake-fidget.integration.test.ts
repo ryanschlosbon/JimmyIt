@@ -108,7 +108,8 @@ describe('score sync between fidget and app', () => {
     const time = createManualTime(START_MS);
     const fidget = createFakeFidget({ clock: time.clock, deviceId: 0xabc123 });
     // Played on the toy before any phone connected (no clock yet).
-    fidget.finishStandaloneGame({ modeId: BasicModeId.spinCount, score: 160, durationS: 30, actions: 16 });
+    // 16 turns: 64 quarter turns at 5 points each.
+    fidget.finishStandaloneGame({ modeId: BasicModeId.spinCount, score: 320, durationS: 30, actions: 64 });
     fidget.finishStandaloneGame({ modeId: BasicModeId.freePlay, score: 45, durationS: 90, completed: true });
 
     const client = await connectFidgetClient(fidget.transport, { clock: time.clock, scheduler: time.scheduler });
@@ -121,10 +122,10 @@ describe('score sync between fidget and app', () => {
       id: 'fidget-00abc123-1-0',
       source: 'fidget',
       deviceId: '00abc123',
-      score: 160,
+      score: 320,
       stars: 2,
       durationMs: 30_000,
-      actions: 16,
+      actions: 64,
       timeIsApproximate: true,
       fidgetRecordId: 1,
     });

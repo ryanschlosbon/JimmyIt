@@ -2,6 +2,7 @@ import {
   BasicModeId,
   createManualTime,
   createMemoryKeyValueStore,
+  Feedback,
   type FidgetTransport,
   SCORE_STORAGE_KEY,
 } from '@jimmyit/core';
@@ -10,6 +11,7 @@ import { defineGame } from '@jimmyit/game-sdk';
 import { describe, expect, it, vi } from 'vitest';
 import { createGameCatalog } from './catalog';
 import type { ToyConnector } from './connection';
+import type { Reward } from './rewards';
 import { getScoreboard } from './scoreboard';
 import { createJimmyServices, ToyNotConnectedError } from './services';
 
@@ -213,5 +215,56 @@ describe('one stream of score events', () => {
     time.advance(10_000);
     await run.result;
     expect(seen).toEqual(['app:gameStart', 'app:points', 'app:gameEnd']);
+  });
+});
+
+describe('rewards', () => {
+  it('celebrates a new badge and a new level on the toy, and tells the screen', async () => {
+    const { fake, services, time } = setup();
+    const rewards: Reward[] = [];
+    services.onReward((reward) => rewards.push(reward));
+    await services.connection.connect();
+
+    const run = services.play(tapGame);
+    fake.tap('clicker');
+    time.advance(10_000);
+    await run.result; // the first game ever: the "First Click" badge
+    await vi.waitFor(() => expect(rewards).toEqual([{ type: 'badge', badgeId: 'first' }]));
+    expect(fake.haptics.at(-1)).toEqual(Feedback.badge);
+
+    fake.playStandaloneGame({ modeId: BasicModeId.freePlay, moves: 25, durationS: 28 }); // 250 more points, live
+    await vi.waitFor(() => expect(rewards.at(-1)).toEqual({ type: 'levelUp', level: 2 }));
+    expect(fake.haptics.at(-1)).toEqual(Feedback.levelUp);
+  });
+
+  it('plays one haptic per sync, level-up first, and never replays records saved before startup', async () => {
+    const { fake, storage, services, time } = setup();
+    const first: Reward[] = [];
+    services.onReward((reward) => first.push(reward));
+    fake.dropConnection();
+    fake.finishStandaloneGame({ modeId: BasicModeId.freePlay, score: 300, durationS: 60, actions: 30 });
+    await services.connection.connect(); // the sync brings a level-up and the first badge at once
+    await vi.waitFor(() => expect(first).toEqual([{ type: 'levelUp', level: 2 }, { type: 'badge', badgeId: 'first' }]));
+    expect(fake.haptics).toEqual([Feedback.levelUp]);
+    await services.connection.disconnect();
+
+    const connector: ToyConnector = {
+      kind: 'simulated',
+      async connect() {
+        fake.reconnect();
+        return fake.transport;
+      },
+    };
+    const restarted = createJimmyServices({ storage, connector, clock: time.clock, scheduler: time.scheduler });
+    const later: Reward[] = [];
+    restarted.onReward((reward) => later.push(reward));
+    await restarted.connection.connect();
+    const run = restarted.play(tapGame);
+    fake.tap('clicker');
+    time.advance(10_000);
+    await run.result; // 301 points: still level 2, and "First Click" was earned before
+    fake.playStandaloneGame({ modeId: BasicModeId.freePlay, moves: 20, durationS: 23 }); // 501: level 3
+    await vi.waitFor(() => expect(later).toEqual([{ type: 'levelUp', level: 3 }]));
+    expect(fake.haptics).toEqual([Feedback.levelUp, Feedback.levelUp]);
   });
 });

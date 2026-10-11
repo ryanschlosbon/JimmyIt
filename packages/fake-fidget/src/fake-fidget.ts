@@ -1,5 +1,6 @@
 import {
   ApprovalStatus,
+  BasicModeId,
   BATTERY_UNKNOWN,
   Capability,
   type Command,
@@ -82,8 +83,10 @@ export interface FakeFidget {
   /** Simulates a standalone game finishing on the toy (record only). */
   finishStandaloneGame(input: FakeRecordInput): number;
   /**
-   * Simulates the child playing a whole standalone game on the toy: +10 per
-   * move, with live score events to a connected app, then the record.
+   * Simulates the child playing a whole standalone game on the toy, with live
+   * score events to a connected app, then the record. Points per move follow the
+   * firmware: Free Play moves are presses (+10 each); Spin Count moves are
+   * quarter turns of the spinner or the screw (+5 each).
    */
   playStandaloneGame(input: { readonly modeId: number; readonly moves: number; readonly durationS: number }): number;
   /** The child's answer to "CONNECT TO …?" (same as pressing the right / left menu key). */
@@ -415,8 +418,9 @@ export function createFakeFidget(options: FakeFidgetOptions = {}): FakeFidget {
     playStandaloneGame(input) {
       const tracker = createScoreEventTracker(bests.get(input.modeId) ?? 0);
       toyEvent(tracker.start(), input.modeId);
+      const pointsPerMove = input.modeId === BasicModeId.spinCount ? 5 : 10;
       for (let move = 1; move <= input.moves; move++) {
-        for (const event of tracker.onScore(move * 10)) toyEvent(event, input.modeId);
+        for (const event of tracker.onScore(move * pointsPerMove)) toyEvent(event, input.modeId);
       }
       const end = tracker.end();
       toyEvent(end, input.modeId);

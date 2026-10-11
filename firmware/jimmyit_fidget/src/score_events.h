@@ -9,6 +9,10 @@
 
 namespace jimmyit {
 
+// The first milestone strictly above `score`: 100, 500, 1000, 1500, 2000, 3000,
+// then every 1000. Same as nextMilestoneAfter in packages/protocol.
+uint32_t nextMilestoneAfter(uint32_t score);
+
 struct ScoreEvent {
   uint8_t kind;  // ScoreEventKind
   uint32_t score;
@@ -17,8 +21,9 @@ struct ScoreEvent {
 
 class ScoreEventTracker {
  public:
-  // At most: points + a few milestones + newBest from one score change.
-  static constexpr size_t kMaxEventsPerChange = 6;
+  // At most: points + a few milestones + newBest from one score change
+  // (0 → 3000 in one jump is points + 6 milestones + newBest).
+  static constexpr size_t kMaxEventsPerChange = 8;
 
   // Returns the gameStart event.
   ScoreEvent start(uint32_t previousBest);

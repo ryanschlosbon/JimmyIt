@@ -1,7 +1,8 @@
 import type { ButtonHeroMove } from '@jimmyit/game-button-hero';
 import type { GameInputEvent } from './game-input';
 
-const MOVES: Readonly<Record<string, ButtonHeroMove>> = { a: 'click', s: 'left', d: 'right', f: 'spin' };
+// Web preview only: on the tablet the toy plays Button Hero.
+const MOVES: Readonly<Record<string, ButtonHeroMove>> = { a: 'click', s: 'left', d: 'right', g: 'strum', f: 'spin' };
 const ARROWS: Readonly<Record<string, { readonly axis: 'horizontal' | 'vertical'; readonly value: number }>> = {
   ArrowLeft: { axis: 'horizontal', value: -1 }, ArrowRight: { axis: 'horizontal', value: 1 },
   ArrowUp: { axis: 'vertical', value: -1 }, ArrowDown: { axis: 'vertical', value: 1 },

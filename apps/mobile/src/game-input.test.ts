@@ -3,9 +3,10 @@ import { dispatchGameInput } from './game-input';
 import { keyboardButtonEvent } from './game-keyboard.web';
 
 describe('game input bridge', () => {
-  it('maps A, S, D, F to click, left, right and spin', () => {
-    expect(['a', 's', 'd', 'f'].map(key => keyboardButtonEvent(key))).toEqual(
-      (['click', 'left', 'right', 'spin'] as const).map(move => ({ type: 'button', source: 'keyboard', move, pressed: true })));
+  it('maps A, S, D, G, F to click, left, right, strum and spin', () => {
+    expect(['a', 's', 'd', 'g', 'f'].map(key => keyboardButtonEvent(key))).toEqual(
+      (['click', 'left', 'right', 'strum', 'spin'] as const).map(move => ({ type: 'button', source: 'keyboard', move,
+        pressed: true })));
     expect(keyboardButtonEvent('F', false)).toEqual({ type: 'button', source: 'keyboard', move: 'spin', pressed: false });
     expect(keyboardButtonEvent('x')).toBeNull();
   });

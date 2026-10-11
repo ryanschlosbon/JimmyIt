@@ -49,6 +49,22 @@
         "batteryPercent": 42,
         "flags": 10
       }
+    },
+    {
+      "name": "screw pushed while the slider is at its top end",
+      "hex": "09 01 80 04 00 04 00 00 00 00 03 00 00 00 d0 07 64 01",
+      "fields": {
+        "seq": 9,
+        "mode": 1,
+        "switches": 1152,
+        "pressed": 1024,
+        "spinnerTotal": 0,
+        "screwTotal": 3,
+        "reserved": 0,
+        "timeMs": 2000,
+        "batteryPercent": 100,
+        "flags": 1
+      }
     }
   ],
   "info": [

@@ -138,15 +138,17 @@ export const PLAY_SHELF: readonly ShelfGame[] = [
     scoreGameId: () => SHAPE_CHALLENGE_GAME.id,
   },
   {
-    id: 'buttonHero', title: 'Button Hero', art: 'rhythm', color: 'rhythm', uses: 'touch', stat: 'best',
-    tagline: 'Click, press or spin to the beat.',
-    howTo: 'Do each move as its note reaches the ring: click, press left or right, or keep spinning through a purple bar. On a computer use A, S, D and hold F.',
+    id: 'buttonHero', title: 'Button Hero', art: 'rhythm', color: 'rhythm', uses: 'jimmy', stat: 'best',
+    tagline: 'Click, strum or spin to the beat.',
+    howTo: 'Do each move on Jimmy as its note reaches the ring: click the top button, press left or right, '
+      + 'slide to strum, or keep turning the knob through a purple bar.',
     options: [], scoreGameId: () => 'button-hero-normal',
   },
   {
-    id: 'knobQuest', title: 'Knob Quest', art: 'dualKnobs', color: 'quest', uses: 'touch', stat: 'best',
+    id: 'knobQuest', title: 'Knob Quest', art: 'dualKnobs', color: 'quest', uses: 'jimmy', stat: 'best',
     tagline: 'Roll Jimmy to the flag.',
-    howTo: 'Spin to roll and turn the screw to float up; faster turns push harder. Hop over holes and land on platforms for points. On a computer use the arrow keys.',
+    howTo: 'Spin the spinner to roll and turn the knob to float up; faster turns push harder. Hop over holes '
+      + 'and land on platforms for points.',
     options: [], scoreGameId: () => 'knob-quest',
   },
 ];
