@@ -1,13 +1,12 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { validateGenerationRequest, validateGeneratedLevel, type AIProvider,
-  type GameGenerationRequest } from '@jimmyit/ai';
-import { DEFAULT_MODEL, SUPPORTED_MODELS } from './gemini';
 import { parseShapeDrawing, validateShapeDrawing, SHAPE_MODEL_ID, type ShapeDrawing, type ModelLabel } from './shape-inference';
 
 export interface AIServerOptions {
-  readonly providerForModel: (model: string, apiKey?: string) => AIProvider;
-  readonly allowedOrigin?: string;
+  /** Browser origins allowed to call the proxy; requests without an Origin (native apps, CLIs) are always allowed. */
+  readonly allowedOrigin?: string | readonly string[];
+  /** Development diagnostics; never receives keys, tokens, drawings or request bodies. */
+  readonly log?: (message: string) => void;
   readonly nowMs?: () => number;
   readonly maxRequestsPerMinute?: number;
   readonly shapeInference?: {
@@ -16,9 +15,6 @@ export interface AIServerOptions {
   };
   readonly shapeInferenceForToken?: (token: string) => NonNullable<AIServerOptions['shapeInference']>;
 }
-
-const REQUEST_KEYS = new Set(['gameType', 'theme', 'difficulty', 'accessibilityPreferences',
-  'targetCount', 'availableInputControls', 'variationSeed']);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -33,6 +29,16 @@ async function readJson(request: IncomingMessage, maxLength = 12_000): Promise<u
   return JSON.parse(body) as unknown;
 }
 
+/** Error names and validator reasons only; provider messages may echo secrets. */
+function describeError(error: unknown): string {
+  if (error instanceof RangeError) return error.message;
+  if (error instanceof Error) {
+    const status = (error as { status?: unknown }).status;
+    return typeof status === 'number' ? `${error.name} (HTTP ${status})` : error.name;
+  }
+  return 'unknown error';
+}
+
 function reply(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -42,31 +48,31 @@ function reply(response: ServerResponse, status: number, body: unknown): void {
 /** Local development proxy. Keep it bound to loopback until an authenticated deployment is designed. */
 export function createAIHttpServer(options: AIServerOptions): Server {
   const nowMs = options.nowMs ?? Date.now;
+  const allowedOrigins: readonly string[] = typeof options.allowedOrigin === 'string'
+    ? [options.allowedOrigin] : options.allowedOrigin ?? [];
+  const log = options.log ?? (() => undefined);
   const limit = options.maxRequestsPerMinute ?? 12;
   let recentRequests: number[] = [];
-  const sessions = new Map<string, { key: string; expiresAt: number }>();
   const shapeSessions = new Map<string, { key: string; expiresAt: number }>();
   const sessionLifetimeMs = 30 * 60_000;
   return createServer((request, response) => {
     void (async () => {
-      if (request.headers.origin && request.headers.origin !== options.allowedOrigin) {
+      // Browsers always send Origin on cross-origin calls, so foreign web pages stop here. Native apps send none.
+      const origin = request.headers.origin;
+      if (origin && !allowedOrigins.includes(origin)) {
         return reply(response, 403, { error: 'Unavailable' });
       }
-      if (options.allowedOrigin && request.headers.origin === options.allowedOrigin) {
-        response.setHeader('Access-Control-Allow-Origin', options.allowedOrigin);
+      if (origin) {
+        response.setHeader('Access-Control-Allow-Origin', origin);
         response.setHeader('Vary', 'Origin');
       }
       if (request.method === 'OPTIONS') {
-        if (request.headers.origin !== options.allowedOrigin) return reply(response, 403, { error: 'Unavailable' });
+        if (!origin) return reply(response, 403, { error: 'Unavailable' });
         response.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-        response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Session-Token, X-Shape-Session');
+        response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Shape-Session');
         return reply(response, 200, {});
       }
       const url = new URL(request.url ?? '/', 'http://localhost');
-      const model = url.searchParams.get('model') ?? DEFAULT_MODEL;
-      for (const [token, session] of sessions) {
-        if (session.expiresAt <= nowMs()) sessions.delete(token);
-      }
       for (const [token, session] of shapeSessions) {
         if (session.expiresAt <= nowMs()) shapeSessions.delete(token);
       }
@@ -92,37 +98,6 @@ export function createAIHttpServer(options: AIServerOptions): Server {
           if (typeof token === 'string') shapeSessions.delete(token);
           return reply(response, 200, { removed: true });
         }
-      }
-      if (url.pathname === '/session') {
-        if (!options.allowedOrigin || request.headers.origin !== options.allowedOrigin) {
-          return reply(response, 403, { error: 'Unavailable' });
-        }
-        if (request.method === 'POST') {
-          if (sessions.size >= 16) return reply(response, 429, { error: 'Try again later' });
-          let payload: unknown;
-          try { payload = await readJson(request); } catch { return reply(response, 400, { error: 'Invalid request' }); }
-          if (!isObject(payload) || typeof payload.apiKey !== 'string' ||
-            payload.apiKey.trim().length < 8 || payload.apiKey.length > 512 || Object.keys(payload).length !== 1) {
-            return reply(response, 400, { error: 'Invalid key' });
-          }
-          const token = randomBytes(32).toString('base64url');
-          sessions.set(token, { key: payload.apiKey.trim(), expiresAt: nowMs() + sessionLifetimeMs });
-          return reply(response, 200, { token, expiresInMs: sessionLifetimeMs });
-        }
-        if (request.method === 'DELETE') {
-          const token = request.headers['x-session-token'];
-          if (typeof token === 'string') sessions.delete(token);
-          return reply(response, 200, { removed: true });
-        }
-      }
-      const token = request.headers['x-session-token'];
-      const key = typeof token === 'string' ? sessions.get(token)?.key : undefined;
-      if (request.method === 'GET' && url.pathname === '/status') {
-        if (!SUPPORTED_MODELS.includes(model as typeof SUPPORTED_MODELS[number])) {
-          return reply(response, 400, { available: false, error: 'Unsupported model' });
-        }
-        return reply(response, 200, { available: await options.providerForModel(model, key).isAvailable(),
-          model, supportedModels: SUPPORTED_MODELS });
       }
       const shapeSession = request.headers['x-shape-session'];
       if (url.pathname.startsWith('/shape/') && shapeSession !== undefined &&
@@ -162,36 +137,13 @@ export function createAIHttpServer(options: AIServerOptions): Server {
           return reply(response, 200, { ...result, modelId: SHAPE_MODEL_ID });
         } catch (error) {
           if (error instanceof RangeError) return reply(response, 422, { error: 'Drawing needs more detail' });
+          log(`shape prediction failed: ${describeError(error)}`);
           return reply(response, 503, { error: 'Shape model unavailable' });
         }
       }
-      if (request.method !== 'POST' || url.pathname !== '/generate') {
-        return reply(response, 404, { error: 'Not found' });
-      }
-      recentRequests = recentRequests.filter((at) => at > nowMs() - 60_000);
-      if (recentRequests.length >= limit) return reply(response, 429, { error: 'Try again later' });
-      recentRequests.push(nowMs());
-      let payload: unknown;
-      try { payload = await readJson(request); } catch { return reply(response, 400, { error: 'Invalid request' }); }
-      if (!isObject(payload) || payload.optIn !== true || !isObject(payload.request) ||
-        typeof payload.model !== 'string' ||
-        !SUPPORTED_MODELS.includes(payload.model as typeof SUPPORTED_MODELS[number]) ||
-        Object.keys(payload.request).some((key) => !REQUEST_KEYS.has(key))) {
-        return reply(response, 400, { error: 'Invalid request' });
-      }
-      const generationRequest = payload.request as unknown as GameGenerationRequest;
-      try { validateGenerationRequest(generationRequest); }
-      catch { return reply(response, 400, { error: 'Invalid request' }); }
-      const provider = options.providerForModel(payload.model, key);
-      if (!await provider.isAvailable()) return reply(response, 503, { error: 'AI unavailable' });
-      try {
-        const level = validateGeneratedLevel(await provider.generate(generationRequest), generationRequest);
-        return reply(response, 200, { level });
-      } catch {
-        return reply(response, 503, { error: 'AI unavailable' });
-      }
+      return reply(response, 404, { error: 'Not found' });
     })().catch(() => {
-      if (!response.headersSent) reply(response, 503, { error: 'AI unavailable' });
+      if (!response.headersSent) reply(response, 503, { error: 'Shape model unavailable' });
       else response.end();
     });
   });

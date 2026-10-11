@@ -21,7 +21,6 @@ import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-
 import type { ShapeRecognitionAction, ShapeRecognitionState } from '@jimmyit/game-shape-recognition';
 import type { ScoreRecord } from '@jimmyit/core';
 import type { SaveStatus } from '@jimmyit/game-sdk';
-import { defaultAccessibilityPreferences } from '@jimmyit/ai';
 import { getTheme } from './theme';
 import { useJimmy } from './use-jimmy';
 import { DRAWING_GAMES, PLAY_SHELF, SHAPE_CHALLENGE_GAME, TIMED_PRACTICE_SECONDS, tapQuestGame, timedPracticeGame,
@@ -221,29 +220,13 @@ function JimmyApp({ virtualToy }: { readonly virtualToy: VirtualToy | null }) {
   };
 
   // Tap Quest adapts its level from this child's recent Tap Quest games.
-  const startTapQuest = async (mode: TapQuestMode): Promise<'local' | 'gemini' | null> => {
+  const startTapQuest = async (mode: TapQuestMode): Promise<'local' | null> => {
     tapQuestSeed.current = tapQuestSeed.current === 0 ? Math.floor(Math.random() * 0x7fffffff) + 1
       : (tapQuestSeed.current + 1) & 0x7fffffff;
-    const seed = tapQuestSeed.current;
-    let game = tapQuestGame(mode, state.records, seed);
-    let source: 'local' | 'gemini' = 'local';
-    if (mode !== 'trace' && state.aiSettings.generationEnabled && state.aiSettings.provider === 'gemini') {
-      const level = await state.aiService.generateLevel({ gameType: 'tapQuest', theme: 'garden', difficulty: 2,
-        accessibilityPreferences: defaultAccessibilityPreferences(), targetCount: 6,
-        availableInputControls: ['screenTouch'], variationSeed: seed });
-      if (level.targets.length >= 4) {
-        try {
-          game = tapQuestGame(mode, state.records, seed,
-            level.targets.map(({ x, y }) => ({ x, y })));
-          source = level.source;
-        } catch {
-          // A generated layout can be valid at its own radius yet overlap at this game's adapted radius.
-        }
-      }
-    }
+    const game = tapQuestGame(mode, state.records, tapQuestSeed.current);
     if (screenRef.current !== 'tapQuest') return null;
     tapQuest.start(game, { tickMs: 100 });
-    return source;
+    return 'local';
   };
 
   const startTimed = (durationMs: number) => {

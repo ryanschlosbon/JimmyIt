@@ -47,9 +47,12 @@ another try when the shape is unrecognized or different.
    npm start -w @jimmyit/ai-service
    ```
 
-3. Point the mobile development build or web preview to the proxy before
-   starting Expo. For a USB-connected Android device, forward port 8787 with
-   `adb reverse tcp:8787 tcp:8787`:
+3. Development builds and the web preview already point to
+   `http://127.0.0.1:8787` through `apps/mobile/.env.development`; set
+   `EXPO_PUBLIC_JIMMY_AI_URL` only to override it. For a USB-connected Android
+   device or emulator, forward port 8787 with `adb reverse tcp:8787 tcp:8787`.
+   The proxy prints at startup whether `HUGGING_FACE_ENDPOINT_URL` is set;
+   without it, saving a shape key fails.
 
    ```powershell
    $env:EXPO_PUBLIC_JIMMY_AI_URL = 'http://127.0.0.1:8787'

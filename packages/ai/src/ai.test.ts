@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLocalProvider, generateLocalLevel } from './local';
 import { getPersonalizationRecommendation } from './personalization';
 import { createAIService } from './service';
-import type { AIProvider, GameGenerationRequest, RoundMetrics } from './types';
+import type { GameGenerationRequest, RoundMetrics } from './types';
 import { defaultAccessibilityPreferences, validateGeneratedLevel, validateGenerationRequest } from './validation';
 
 const preferences = defaultAccessibilityPreferences();
@@ -77,54 +77,23 @@ describe('personalization', () => {
   });
 });
 
-describe('provider fallback', () => {
-  it('changes a repeated Gemini layout to a fresh local pattern', async () => {
-    const same = { ...generateLocalLevel(request), source: 'gemini' as const };
-    const remote: AIProvider = { name: 'gemini', isAvailable: async () => true,
-      testConnection: async () => true, generate: async () => same };
-    const service = createAIService({ remote, enabled: true });
+describe('level service', () => {
+  it('changes a repeated layout to a fresh local pattern', async () => {
+    const service = createAIService();
     const first = await service.generateLevel({ ...request, variationSeed: 101 });
-    const second = await service.generateLevel({ ...request, variationSeed: 102 });
-    expect(first.source).toBe('gemini');
+    const second = await service.generateLevel({ ...request, variationSeed: 101 });
+    expect(first.source).toBe('local');
     expect(second.source).toBe('local');
     expect(second.targets).not.toEqual(first.targets);
   });
-  it('keeps local generation available when Gemini is unconfigured or unavailable', async () => {
+
+  it('keeps the local provider always available', async () => {
     const local = createLocalProvider();
     expect(await local.isAvailable()).toBe(true);
     expect(await local.testConnection()).toBe(true);
-    const service = createAIService();
-    expect(await service.isAIProviderAvailable()).toBe(false);
-    expect(await service.testAIConnection()).toBe(false);
-    expect((await service.generateLevel(request)).source).toBe('local');
   });
 
-  it('falls back for failures and invalid responses', async () => {
-    for (const generate of [async () => { throw new Error('secret'); }, async () => ({ x: 100 })]) {
-      const remote: AIProvider = { name: 'gemini', isAvailable: async () => true,
-        testConnection: async () => true, generate };
-      const service = createAIService({ remote, enabled: true });
-      expect(await service.isAIProviderAvailable()).toBe(true);
-      expect(await service.testAIConnection()).toBe(true);
-      expect((await service.generateLevel(request)).source).toBe('local');
-    }
-  });
-
-  it('falls back when the configured model is unavailable', async () => {
-    const remote: AIProvider = { name: 'gemini', isAvailable: async () => false,
-      testConnection: async () => false, generate: async () => { throw new Error('must not call'); } };
-    const service = createAIService({ remote, enabled: true });
-    expect(await service.isAIProviderAvailable()).toBe(false);
-    expect((await service.generateLevel(request)).source).toBe('local');
-  });
-
-  it('accepts a validated server response and never touches scoring', async () => {
-    const good = { ...generateLocalLevel(request), source: 'gemini' as const };
-    let sent: GameGenerationRequest | null = null;
-    const remote: AIProvider = { name: 'gemini', isAvailable: async () => true,
-      testConnection: async () => true, generate: async (input) => { sent = input; return good; } };
-    expect(await createAIService({ remote, enabled: true }).generateLevel({ ...request,
-      performance: { gameId: 'tap-quest-precision', currentDifficulty: 2, recentRounds: [round(0.9)] } })).toEqual(good);
-    expect(sent).not.toHaveProperty('performance');
+  it('rejects levels that claim another source', () => {
+    expect(() => validateGeneratedLevel({ ...generateLocalLevel(request), source: 'gemini' }, request)).toThrow();
   });
 });
