@@ -67,6 +67,15 @@ export interface Palette {
   readonly dot: string;
   readonly dotActive: string;
   readonly banners: Readonly<Record<BannerColorName, BannerColors>>;
+  /** Paint stays true to its swatch in every appearance; editor surfaces follow the theme. */
+  readonly art: {
+    readonly colors: readonly { readonly name: string; readonly color: string }[];
+    readonly paper: string;
+    readonly guide: string;
+    readonly panelBorder: string;
+    readonly titleBackground: string;
+    readonly titleText: string;
+  };
 }
 
 export interface ColorStyle {
@@ -89,6 +98,17 @@ const classicLight: Palette = {
   bubbleOpacity: 1,
   score: { pill: '#7A0B5A', pillText: '#FFFFFF', value: '#7A0B5A' },
   dot: '#EF6B62', dotActive: '#18A999',
+  art: {
+    colors: [
+      { name: 'Forest green', color: '#257A0A' }, { name: 'Purple', color: '#8050BC' },
+      { name: 'Leaf green', color: '#4DBF46' }, { name: 'Red', color: '#D50016' },
+      { name: 'Black', color: '#000000' }, { name: 'Orange', color: '#FF6A00' },
+      { name: 'Ocean blue', color: '#0076C2' }, { name: 'Yellow', color: '#FFE335' },
+      { name: 'Sky blue', color: '#54C9F0' }, { name: 'Brown', color: '#96684D' },
+      { name: 'Pink', color: '#DF54AD' }, { name: 'Gray', color: '#92918C' },
+    ],
+    paper: '#FFFFFF', guide: '#55657A', panelBorder: '#718096', titleBackground: '#087C71', titleText: '#FFFFFF',
+  },
   banners: {
     mint: { background: '#E5F8F5', border: '#C9EEE6', accent: '#18A999', shadow: '#2BB8A3', chip: '#FFFFFF' },
     lilac: { background: '#F1ECFC', border: '#DDD2F6', accent: '#A88BEB', shadow: '#A88BEB', chip: '#FFFFFF' },
@@ -106,6 +126,7 @@ const classicDark: Palette = {
   text: '#F7F7F7', secondary: '#B8C4D6', focus: '#F5C84C', accentText: '#67D0B1', gold: '#F5C84C',
   softMint: '#234C51', softCoral: '#553B4C', softPurple: '#393B60',
   berry: '#C455A6',
+  art: { ...classicLight.art, panelBorder: '#8798B0' },
   bubbleOpacity: 0.32,
   score: { pill: '#C455A6', pillText: '#FFFFFF', value: '#F2A8DC' },
   banners: {

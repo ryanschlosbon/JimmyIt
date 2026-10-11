@@ -1,99 +1,134 @@
 import { useState } from 'react';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
-import { Body, Button, Eyebrow, Heading } from '../components/Controls';
+import { Text, View, useWindowDimensions } from 'react-native';
+import { Body } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { Jimmy } from '../components/Jimmy';
+import { Tappable } from '../components/Tappable';
 import { DrawingCanvas } from '../components/DrawingCanvas';
+import { ART, ART_BRUSH_SIZES, FONTS, RADIUS, SIZE, SPACE, TYPE } from '../design/tokens';
 import type { Theme } from '../theme';
 import type { Activity } from '../games';
 import type { DrawingAction, Stroke } from '@jimmyit/game-drawing';
-
-const PALETTE = [
-  { name: 'Ocean blue', color: '#3387D6' }, { name: 'Coral', color: '#D85E57' },
-  { name: 'Berry', color: '#BF4CA0' }, { name: 'Purple', color: '#9470E0' },
-  { name: 'Teal', color: '#14A798' }, { name: 'Golden yellow', color: '#BA8B00' },
-  { name: 'Mint green', color: '#348F6B' }, { name: 'Slate', color: '#8095AB' },
-] as const;
 
 export function DrawingScreen({ theme, activity, strokes, dispatch, finish, saving }: {
   readonly theme: Theme; readonly activity: Activity; readonly strokes: readonly Stroke[];
   readonly dispatch: (action: DrawingAction) => void; readonly finish: () => void; readonly saving: boolean;
 }) {
-  const { width } = useWindowDimensions();
-  const compact = width < 750;
-  const [color, setColor] = useState<string>(PALETTE[0].color);
-  const [brushSize, setBrushSize] = useState(10);
-  const [focusedColor, setFocusedColor] = useState<string | null>(null);
+  const { width, height } = useWindowDimensions();
+  const compact = width < SIZE.compactWidth;
+  const workspaceHeight = Math.max(ART.canvasMinHeight + ART.titleHeight + ART.actionHeight + SPACE.sm * 2,
+    height - ART.viewportChromeHeight);
+  const canvasHeight = workspaceHeight - ART.titleHeight - ART.actionHeight - SPACE.sm * 2;
+  const toolPanelHeight = (count: number, columns: number) => {
+    const rows = Math.ceil(count / columns);
+    return rows * SIZE.touchTarget + (rows - 1) * SPACE.sm + SPACE.sm * 2 + ART.borderWidth * 2;
+  };
+  const twoColumnHeight = toolPanelHeight(theme.art.colors.length, 2)
+    + toolPanelHeight(ART_BRUSH_SIZES.length, 2) + SPACE.sm;
+  const toolColumns = compact ? 4 : workspaceHeight >= twoColumnHeight ? 2 : 3;
+  const sidebarWidth = toolColumns * SIZE.touchTarget + (toolColumns - 1) * SPACE.sm
+    + SPACE.sm * 2 + ART.borderWidth * 2;
+  const [colorName, setColorName] = useState('Ocean blue');
+  const [brushSize, setBrushSize] = useState<number>(12);
+  const color = theme.art.colors.find(swatch => swatch.name === colorName)?.color ?? theme.ink;
   const shapes = activity === 'shapes';
-  return <View style={{ gap: 24 }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
-      <View style={{ gap: 7 }}><Eyebrow theme={theme}>{shapes ? 'Play & practice' : 'Your imagination lives here'}</Eyebrow>
-        <Heading theme={theme} level={1} size={compact ? 36 : 44}>{shapes ? 'Shape Challenge' : 'Drawing with Jimmy'}</Heading></View>
-      {!compact && <View style={{ backgroundColor: theme.softMint, padding: 14, borderRadius: 15,
-        flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Icon name="star" color={theme.accentText} size={20} />
-        <Body theme={theme} small>Every try earns points</Body>
+  const panelStyle = {
+    backgroundColor: theme.raised, borderColor: theme.art.panelBorder, borderWidth: ART.borderWidth,
+    borderRadius: RADIUS.lg, padding: SPACE.sm,
+  } as const;
+  const tools = <View accessibilityLabel="Art colors and brush sizes"
+    style={{ width: compact ? '100%' : sidebarWidth, gap: SPACE.sm }}>
+    <View style={panelStyle}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Drawing color"
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'center' }}>
+        {theme.art.colors.map(swatch => {
+          const selected = colorName === swatch.name;
+          return <Tappable key={swatch.name} accessibilityRole="radio"
+            accessibilityLabel={`${swatch.name} drawing color`} accessibilityState={{ checked: selected }}
+            onPress={() => setColorName(swatch.name)} focusColor={theme.focus} disabled={saving}
+            style={{ width: SIZE.touchTarget, height: SIZE.touchTarget, borderRadius: ART.swatchRadius,
+              backgroundColor: swatch.color, alignItems: 'center', justifyContent: 'center',
+              borderWidth: ART.selectedBorderWidth, borderColor: selected ? theme.ink : theme.art.panelBorder }}>
+            {selected && <View style={{ backgroundColor: theme.yellow, borderRadius: RADIUS.pill, padding: SPACE.xs }}>
+              <Icon name="check" color={theme.ink} size={TYPE.body} weight={3} />
+            </View>}
+          </Tappable>;
+        })}
+      </View>
+    </View>
+    <View style={panelStyle}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Brush size"
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm, justifyContent: 'center' }}>
+        {ART_BRUSH_SIZES.map(size => <Tappable key={size} accessibilityRole="radio"
+          accessibilityLabel={`${size} pixel brush`} accessibilityState={{ checked: brushSize === size }}
+          onPress={() => setBrushSize(size)} focusColor={theme.focus} disabled={saving}
+          style={{ width: SIZE.touchTarget, height: SIZE.touchTarget, borderRadius: ART.swatchRadius,
+            backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center',
+            borderWidth: ART.selectedBorderWidth,
+            borderColor: brushSize === size ? theme.focus : theme.art.panelBorder }}>
+          <View style={{ width: size, height: size,
+            borderRadius: RADIUS.pill, backgroundColor: theme.text }} />
+          {brushSize === size && <View style={{ position: 'absolute', top: SPACE.xs, right: SPACE.xs,
+            backgroundColor: theme.yellow, borderRadius: RADIUS.pill }}>
+            <Icon name="check" color={theme.ink} size={TYPE.caption} weight={3} />
+          </View>}
+        </Tappable>)}
+      </View>
+    </View>
+  </View>;
+
+  return <View style={{ flexDirection: compact ? 'column' : 'row', gap: SPACE.lg, alignItems: 'flex-start' }}>
+    {!compact && tools}
+    <View style={{ flex: compact ? undefined : 1, width: compact ? '100%' : undefined, minWidth: 0, gap: SPACE.sm }}>
+      <View style={{ alignSelf: 'center', minHeight: ART.titleHeight, justifyContent: 'center',
+        paddingHorizontal: SPACE.xl, paddingVertical: SPACE.xs, borderRadius: RADIUS.lg,
+        backgroundColor: theme.art.titleBackground }}>
+        <Text accessibilityRole="header" aria-level={1} style={{ fontFamily: FONTS.display,
+          fontSize: TYPE.heading, lineHeight: TYPE.heading * 1.2,
+          color: theme.art.titleText, textAlign: 'center' }}>
+          {shapes ? 'SHAPE CHALLENGE' : 'YOUR MASTERPIECE'}
+        </Text>
+      </View>
+      <View>
+        <DrawingCanvas strokes={strokes} dispatch={dispatch} color={color} brushSize={brushSize}
+          shapes={shapes} theme={theme} disabled={saving}
+          height={compact ? ART.phoneCanvasHeight : canvasHeight} />
+        {shapes && <View pointerEvents="none" style={{ position: 'absolute', top: SPACE.md, left: SPACE.md,
+          right: SPACE.md, borderRadius: RADIUS.sm, padding: SPACE.sm, backgroundColor: theme.sheet }}>
+          <Body theme={theme} small>Follow the circle at your own pace.</Body>
+        </View>}
+      </View>
+      <View style={{ flexDirection: 'row', gap: SPACE.md, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <Tappable accessibilityLabel="Undo last stroke" onPress={() => dispatch({ type: 'undo' })}
+          disabled={strokes.length === 0 || saving} focusColor={theme.focus}
+          style={{ width: compact ? SIZE.touchTarget : ART.actionHeight,
+            minHeight: compact ? SIZE.touchTarget : ART.actionHeight, borderRadius: RADIUS.lg,
+            backgroundColor: theme.mint, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="undo" color={theme.ink} size={ART.actionIcon} weight={3} />
+        </Tappable>
+        <Tappable accessibilityLabel="Clear drawing" onPress={() => dispatch({ type: 'clear' })}
+          disabled={strokes.length === 0 || saving} focusColor={theme.focus}
+          style={{ minHeight: compact ? SIZE.touchTarget : ART.actionHeight, paddingHorizontal: SPACE.lg,
+            borderRadius: RADIUS.lg, backgroundColor: theme.mint, flexDirection: 'row', gap: SPACE.sm,
+            alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: FONTS.display, fontSize: TYPE.subheading,
+            color: theme.ink }}>Clear</Text>
+          <Icon name="trash" color={theme.ink} size={ART.actionIcon} weight={2.5} />
+        </Tappable>
+        <Tappable accessibilityLabel={saving ? 'Saving drawing' : 'Submit drawing'} onPress={finish}
+          disabled={saving} focusColor={theme.focus}
+          style={{ minHeight: compact ? SIZE.touchTarget : ART.actionHeight, paddingHorizontal: SPACE.xl,
+            borderRadius: RADIUS.lg, backgroundColor: theme.yellow, flexDirection: 'row', gap: SPACE.lg,
+            alignItems: 'center', justifyContent: 'center', flexGrow: compact ? 1 : 0 }}>
+          <Text style={{ fontFamily: FONTS.display, fontSize: TYPE.subheading,
+            color: theme.ink }}>{saving ? 'Saving…' : 'SUBMIT'}</Text>
+          <Jimmy face size={ART.faceSize} color={theme.yellow} />
+        </Tappable>
+      </View>
+      {compact && <View style={{ backgroundColor: theme.sheet, padding: SPACE.md, borderRadius: RADIUS.sm }}>
+        <Body theme={theme} small>Pick a color and make your mark. Your finger, pen, or mouse can all join in.</Body>
       </View>}
     </View>
-    <View style={{ backgroundColor: theme.softMint, borderRadius: 18, paddingHorizontal: 22, paddingVertical: 15,
-      flexDirection: 'row', alignItems: 'center', gap: 13 }}>
-      <Icon name={shapes ? 'shapes' : 'sparkle'} color={theme.accentText} />
-      <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
-        {shapes ? 'Can you follow the circle? Take your time — every little try counts.'
-          : 'Pick a color. Make your mark. There’s no wrong way to create!'}
-      </Body></View>
-    </View>
-    <View style={{ backgroundColor: theme.surface, borderRadius: 28, padding: compact ? 14 : 24,
-      borderWidth: 1.5, borderColor: theme.border, gap: 20 }}>
-      <View style={{ flexDirection: compact ? 'column' : 'row', gap: 20 }}>
-        <View style={{ width: compact ? '100%' : 86, backgroundColor: theme.raised, borderRadius: 20,
-          alignItems: 'center', justifyContent: 'center', gap: 12, padding: 12,
-          flexDirection: compact ? 'row' : 'column', flexWrap: compact ? 'wrap' : 'nowrap' }}>
-          {PALETTE.map(swatch => <Pressable key={swatch.name} accessibilityRole="button"
-            accessibilityLabel={`${swatch.name} drawing color`} accessibilityState={{ selected: color === swatch.color }}
-            onPress={() => setColor(swatch.color)} onFocus={() => setFocusedColor(swatch.color)}
-            onBlur={() => setFocusedColor(null)} style={({ pressed }) => [{
-              width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-              borderWidth: color === swatch.color || focusedColor === swatch.color ? 3 : 1.5,
-              borderColor: focusedColor === swatch.color ? theme.focus
-                : color === swatch.color ? theme.text : theme.border,
-              backgroundColor: swatch.color, opacity: pressed ? .7 : 1,
-            }]}>
-            {color === swatch.color && <View style={{ backgroundColor: theme.navy, padding: 3, borderRadius: 12 }}>
-              <Icon name="check" color="#FFFFFF" size={19} />
-            </View>}
-          </Pressable>)}
-        </View>
-        <View style={{ flex: 1, gap: 15 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 5 }}>
-            <Eyebrow theme={theme}>Your masterpiece</Eyebrow>
-            <Body theme={theme} small>{strokes.length === 0 ? 'A fresh start' : `${strokes.length} little marks`}</Body>
-          </View>
-          <DrawingCanvas strokes={strokes} dispatch={dispatch} color={color} brushSize={brushSize}
-            shapes={shapes} dark={theme.dark} disabled={saving} />
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Text style={{ color: theme.text, fontFamily: 'PoppinsBold', fontSize: 18 }}>Brush size</Text>
-          <Button theme={theme} icon="minus" accessibilityLabel="Smaller brush" compact
-            onPress={() => setBrushSize(size => Math.max(4, size - 4))} disabled={brushSize <= 4} />
-          <View style={{ width: 38, alignItems: 'center', gap: 5 }}>
-            <View style={{ width: brushSize, height: brushSize, borderRadius: 30, backgroundColor: color }} />
-            <Text style={{ color: theme.secondary, fontFamily: 'Poppins', fontSize: 14 }}>{brushSize}</Text>
-          </View>
-          <Button theme={theme} icon="plus" accessibilityLabel="Larger brush" compact
-            onPress={() => setBrushSize(size => Math.min(30, size + 4))} disabled={brushSize >= 30} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-          <Button theme={theme} label="Undo" icon="undo" compact disabled={strokes.length === 0 || saving}
-            onPress={() => dispatch({ type: 'undo' })} />
-          <Button theme={theme} label="Clear" icon="trash" compact disabled={strokes.length === 0 || saving}
-            onPress={() => dispatch({ type: 'clear' })} />
-          <Button theme={theme} label={saving ? 'Saving…' : 'All done!'} icon="check" color={theme.yellow}
-            onPress={finish} disabled={saving} />
-        </View>
-      </View>
-    </View>
-    <Body theme={theme} small>Your finger, a pen, or a mouse — they all make something wonderful.</Body>
+    {compact && tools}
   </View>;
 }
