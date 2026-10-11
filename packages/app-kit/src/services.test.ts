@@ -261,6 +261,29 @@ describe('one stream of score events', () => {
   });
 });
 
+describe('feedback from app games', () => {
+  const cheerGame = defineGame<null>({
+    id: 'cheer-test',
+    title: 'Cheer test',
+    description: 'Cheers when the drawing is done.',
+    skills: ['draw'],
+    durationMs: 1_000,
+    needsToy: false,
+    starThresholds: [1, 2, 3],
+    create: (session) => ({ getState: () => null, onFinish: () => session.feedback('success') }),
+  });
+
+  it('reaches onFeedback, even with no toy, so the app can play a sound', async () => {
+    const { services, time } = setup();
+    const heard: string[] = [];
+    services.onFeedback((name) => heard.push(name));
+    const run = services.play(cheerGame);
+    time.advance(1_000);
+    await run.result;
+    expect(heard).toEqual(['success']);
+  });
+});
+
 describe('rewards', () => {
   it('celebrates a new badge and a new level on the toy, and tells the screen', async () => {
     const { fake, services, time } = setup();

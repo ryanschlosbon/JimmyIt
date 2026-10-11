@@ -146,3 +146,43 @@ describe('a toy that comes and goes during a game', () => {
     expect(run.getScore().score).toBe(80);
   });
 });
+
+describe('feedback from app games', () => {
+  const cheerGame = defineGame<null>({
+    id: 'cheer',
+    title: 'Cheer',
+    description: 'Cheers on every clicker press.',
+    skills: ['press'],
+    durationMs: 10_000,
+    starThresholds: [1, 2, 3],
+    create(session) {
+      return {
+        getState: () => null,
+        onEvent(event) {
+          if (event.type === 'switchDown' && event.switchId === 'clicker') session.feedback('success');
+        },
+        onFinish: () => session.feedback('celebrate'),
+      };
+    },
+  });
+
+  it('reaches onFeedback as well as the toy', async () => {
+    // The harness's own run stays away from the toy; this run gets it.
+    const h = await createGameTestHarness(cheerGame, { toy: false });
+    const heard: string[] = [];
+    const run = startGame(cheerGame, { device: h.client, repository: h.repository, onFeedback: (name) => heard.push(name) });
+    const haptic = vi.spyOn(h.client, 'feedback');
+    h.fidget.tap('clicker');
+    await run.quit();
+    expect(heard).toEqual(['success', 'celebrate']);
+    expect(haptic).toHaveBeenCalledWith('success');
+  });
+
+  it('reaches onFeedback with no toy connected', async () => {
+    const h = await createGameTestHarness(cheerGame, { toy: false });
+    const heard: string[] = [];
+    const run = startGame(cheerGame, { device: null, repository: h.repository, onFeedback: (name) => heard.push(name) });
+    await run.quit();
+    expect(heard).toEqual(['celebrate']);
+  });
+});
