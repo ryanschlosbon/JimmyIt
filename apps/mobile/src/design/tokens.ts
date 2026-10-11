@@ -72,9 +72,14 @@ export const ACTIVITY_HEADER = {
   bubbleSize: 160, smallBubbleSize: 112, shadowHeight: 8,
 } as const;
 
-/** The Tap Quest board is the biggest square that fits the screen; these are its details. */
+/**
+ * The Tap Quest board fills the space beside its button column, always wider than tall: its width ÷ height stays
+ * between the two ratios.
+ */
 export const TAP_QUEST_VIEW = {
   borderWidth: 2, targetBorderWidth: 3, pathDotSize: 6,
+  minAspectRatio: 1.25, maxAspectRatio: 2.2,
+  sideWidth: 200, sideWidthCompact: 150,
 } as const;
 
 /** The supplied Rewards banner keeps its full proportions on tablets. */

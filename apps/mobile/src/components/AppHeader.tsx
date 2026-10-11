@@ -17,9 +17,11 @@ const CONNECTION_LABEL: Readonly<Record<Connection, string>> = {
   disconnected: 'Find Jimmy',
 };
 
-export function AppHeader({ theme, compact, active, connection, onTab }: {
+export function AppHeader({ theme, compact, active, connection, onTab, topInset = 0 }: {
   readonly theme: Theme; readonly compact: boolean; readonly active: HeaderTab | null;
   readonly connection: Connection; readonly onTab: (tab: HeaderTab) => void;
+  /** The status bar's height: the header's background reaches up behind it to the top of the screen. */
+  readonly topInset?: number;
 }) {
   // The narrowest phones keep the face and drop the wordmark so all three buttons stay full size.
   const narrow = useWindowDimensions().width < 350;
@@ -31,7 +33,8 @@ export function AppHeader({ theme, compact, active, connection, onTab }: {
     { tab: 'rewards', icon: 'trophy', label: 'Rewards and high scores', color: theme.nav.rewards },
     { tab: 'settings', icon: 'gear', label: 'Settings', color: theme.nav.settings },
   ];
-  return <View role="banner" style={[styles.bar, { backgroundColor: theme.header, borderColor: theme.headerBorder }]}>
+  return <View role="banner" style={[styles.bar, { backgroundColor: theme.header, borderColor: theme.headerBorder,
+    paddingTop: topInset }]}>
     <View style={[styles.inner, { paddingHorizontal: compact ? 12 : 28, paddingVertical: compact ? 8 : 14 }]}>
       <Tappable accessibilityLabel="JimmyIt, play games" onPress={() => onTab('play')} focusColor={theme.focus}
         pressShade={0} style={[styles.brand, { gap: compact ? 8 : 12 }]}>

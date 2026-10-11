@@ -31,6 +31,11 @@ export interface JimmyServices {
   readonly connection: ConnectionManager;
   /** Starts a game, wired to the connected toy if there is one. */
   play<TState, TAction = never>(game: GameDefinition<TState, TAction>, options?: { tickMs?: number }): GameRun<TState, TAction>;
+  /**
+   * Disconnects and gives this app a new id, so the toy treats it as a phone it has never met and asks the child
+   * "connect?" again (for demos). The toy forgets the old id by itself as newer phones are approved.
+   */
+  forgetToy(): Promise<void>;
   /** Whether `game` can start right now (screen-only games always can). */
   canPlay(game: Pick<GameDefinition<unknown>, 'needsToy'>): boolean;
   /**
@@ -63,7 +68,13 @@ export interface JimmyServicesOptions {
 async function loadAppId(storage: KeyValueStore): Promise<number> {
   const saved = Number(await storage.getItem(APP_ID_STORAGE_KEY).catch(() => null));
   if (Number.isInteger(saved) && saved > 0 && saved <= 0xffffffff) return saved;
-  const appId = createAppId() || 1;
+  return newAppId(storage, null);
+}
+
+/** Picks and keeps a fresh id, never the one being replaced. */
+async function newAppId(storage: KeyValueStore, previous: number | null): Promise<number> {
+  let appId = createAppId() || 1;
+  while (appId === previous) appId = createAppId() || 1;
   await storage.setItem(APP_ID_STORAGE_KEY, String(appId)).catch(() => undefined);
   return appId;
 }
@@ -74,13 +85,14 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
   const repository = createScoreRepository(options.storage);
   const scoreEvents = createEmitter<ScoreEvent>();
   let identity: Promise<AppIdentity> | null = null;
+  const appName = options.appName ?? 'Jimmy app';
   const connection = createConnectionManager({
     connector: options.connector,
     repository,
     clock,
     scheduler,
     identity: () => {
-      identity ??= loadAppId(options.storage).then((appId) => ({ appId, appName: options.appName ?? 'Jimmy app' }));
+      identity ??= loadAppId(options.storage).then((appId) => ({ appId, appName }));
       return identity;
     },
     onToyScoreEvent: (event) => scoreEvents.emit(event),
@@ -98,12 +110,20 @@ export function createJimmyServices(options: JimmyServicesOptions): JimmyService
     repository,
     connection,
     canPlay,
+    async forgetToy() {
+      await connection.disconnect();
+      const previous = identity ? (await identity.catch(() => null))?.appId ?? null : null;
+      const appId = await newAppId(options.storage, previous);
+      identity = Promise.resolve({ appId, appName });
+    },
     onScoreEvent: (listener) => scoreEvents.subscribe(listener),
     onReward: (listener) => rewards.onReward(listener),
     play(game, playOptions = {}) {
       if (!canPlay(game)) throw new ToyNotConnectedError(game.id);
       return startGame(game, {
-        device: connection.getClient(),
+        // The toy connected right now, followed through connects, reconnects and drops: a game started before the
+        // toy was ready (or before it reconnected) still hears it.
+        devices: { current: () => connection.getClient(), onChange: (listener) => connection.subscribe(() => listener()) },
         repository,
         clock,
         scheduler,

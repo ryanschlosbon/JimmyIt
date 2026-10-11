@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Text, View, useWindowDimensions, type GestureResponderEvent, type LayoutRectangle } from 'react-native';
+import { AppState, Text, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle, Polyline } from 'react-native-svg';
 import type { GameRunControls } from '@jimmyit/app-kit';
 import type { TapQuestAction, TapQuestMode, TapQuestState } from '@jimmyit/game-tap-quest';
@@ -18,7 +18,8 @@ export interface TapQuestToy {
 
 export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoStart, onAutoStarted }: {
   readonly theme: Theme; readonly run: GameRunControls<TapQuestState, TapQuestAction>;
-  readonly onStart: (mode: TapQuestMode) => Promise<'local' | null>; readonly toy: TapQuestToy;
+  /** Starts a game on a board this many times wider than tall. */
+  readonly onStart: (mode: TapQuestMode, aspectRatio: number) => Promise<'local' | null>; readonly toy: TapQuestToy;
   /** Chosen on the play screen's banner, and changeable here. */
   readonly mode: TapQuestMode; readonly onMode: (mode: TapQuestMode) => void;
   /** True after Play on the banner: start a game as soon as this screen opens, if one can start. */
@@ -26,34 +27,38 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
 }) {
   const { width } = useWindowDimensions();
   const compact = width < SIZE.compactWidth;
-  const [layout, setLayout] = useState<LayoutRectangle>({ x: 0, y: 0, width: 1, height: 1 });
-  // The board is the biggest square that fits the space left on screen, so it never needs scrolling.
-  const [boardSide, setBoardSide] = useState(0);
+  // The board fills the space beside the buttons: a rectangle wider than tall, never needing a scroll.
+  const [area, setArea] = useState({ width: 0, height: 0 });
   const [stylusPaused, setStylusPaused] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [patternMessage, setPatternMessage] = useState<string | null>(null);
+  const [startFailed, setStartFailed] = useState(false);
   const { status, saveStatus, state, pause, resume, submit } = run;
   const active = status === 'running' || status === 'paused';
   const stylusInJimmy = toy.connected && toy.stylusStowed;
+  const areaAspect = area.height > 0 ? area.width / area.height : TAP_QUEST_VIEW.minAspectRatio;
+  // A new game takes the shape of the space it has now; a running one keeps the shape it started with.
+  const aspect = state && active ? state.aspectRatio
+    : Math.max(TAP_QUEST_VIEW.minAspectRatio, Math.min(TAP_QUEST_VIEW.maxAspectRatio, areaAspect));
+  const boardWidth = Math.floor(Math.min(area.width, area.height * aspect));
+  const boardHeight = Math.floor(boardWidth / aspect);
   const startPattern = () => {
     if (starting) return;
     setStylusPaused(false);
     setStarting(true);
-    setPatternMessage(null);
-    onStart(mode).then(source => {
-      if (source) setPatternMessage('New pattern');
-    }).catch(() => setPatternMessage('Could not start this pattern. Please try again.'))
-      .finally(() => setStarting(false));
+    setStartFailed(false);
+    onStart(mode, aspect).catch(() => setStartFailed(true)).finally(() => setStarting(false));
   };
 
-  // Play on the banner starts straight away, or the moment the stylus comes out of Jimmy.
+  // Play on the banner starts straight away (once the board has its size, so the game gets its shape), or the
+  // moment the stylus comes out of Jimmy.
+  const measured = area.width > 0 && area.height > 0;
   useEffect(() => {
-    if (!autoStart || stylusInJimmy || saveStatus === 'saving') return;
+    if (!autoStart || stylusInJimmy || saveStatus === 'saving' || !measured) return;
     onAutoStarted();
     if (!active) startPattern();
-  }, [autoStart, stylusInJimmy]); // a request, or the stylus coming out, starts a game
+  }, [autoStart, stylusInJimmy, measured]); // a request, the stylus coming out, or the first layout starts a game
 
-  // Leaving the screen or switching apps pauses the game; points are never lost.
+  // Switching apps pauses the game (leaving the screen ends it, in App.tsx); points are never lost.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => { if (next !== 'active') pause(); });
     return () => { subscription.remove(); pause(); };
@@ -71,28 +76,27 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
   }, [toy.connected, toy.stylusStowed, status, pause]);
 
   const touch = (event: GestureResponderEvent, phase: 'down' | 'move' | 'up') => {
-    if (status !== 'running') return;
-    const x = Math.max(0, Math.min(1, event.nativeEvent.locationX / layout.width));
-    const y = Math.max(0, Math.min(1, event.nativeEvent.locationY / layout.height));
+    if (status !== 'running' || boardWidth <= 0) return;
+    const x = Math.max(0, Math.min(1, event.nativeEvent.locationX / boardWidth));
+    const y = Math.max(0, Math.min(1, event.nativeEvent.locationY / boardHeight));
     submit({ type: 'touch', phase, point: { x, y } });
   };
 
-  const size = layout.width;
-  const scale = (value: number) => value * size;
+  // The game's positions are in board heights.
+  const scale = (value: number) => value * boardHeight;
   const recall = state?.memoryPhase === 'recall';
   const windowMs = state ? state.settings.targetDurationMs + (state.feedback.generousTiming ? state.settings.timingWindowMs : 0) : 1;
 
+  const buttonStyle = { width: '100%' } as const;
   return <View style={{ flex: 1, gap: SPACE.md }}>
     <ActivityHeader theme={theme} activity="tapQuest" title="Tap Quest" slim />
 
-    {toy.connected && <View style={{ backgroundColor: stylusInJimmy ? theme.softCoral : theme.softMint, borderRadius: RADIUS.md,
+    {(stylusInJimmy || stylusPaused) && <View style={{ backgroundColor: theme.softCoral, borderRadius: RADIUS.md,
       paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, flexDirection: 'row', gap: SPACE.md, alignItems: 'center' }}>
       <Icon name="toy" color={theme.accentText} />
       <View style={{ flex: 1 }}><Body theme={theme} small color={theme.text}>
         {stylusPaused ? 'The stylus is back in Jimmy, so we paused. Take it out and tap Resume.'
-          : stylusInJimmy ? (autoStart ? 'Take the stylus out of Jimmy and the game will start.'
-            : 'Take the stylus out of Jimmy to play.')
-          : 'Stylus out and ready. Jimmy will cheer you on!'}
+          : autoStart ? 'Take the stylus out of Jimmy and the game will start.' : 'Take the stylus out of Jimmy to play.'}
       </Body></View>
     </View>}
 
@@ -105,74 +109,69 @@ export function TapQuestScreen({ theme, run, onStart, toy, mode, onMode, autoSta
       </View>
     </View>}
 
-    <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.surface, borderColor: theme.border,
-      borderWidth: TAP_QUEST_VIEW.borderWidth, borderRadius: RADIUS.lg, padding: compact ? SPACE.sm : SPACE.md,
-      gap: SPACE.sm, alignItems: 'center' }}>
-      {state && active && <View style={{ width: '100%', maxWidth: boardSide, gap: SPACE.xs }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+    <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', gap: SPACE.md }}>
+      <View style={{ flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center' }}
+        onLayout={event => setArea({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
+        {boardWidth > 0 && <View accessible accessibilityLabel={active
+          ? 'Tap Quest play area. Touch the circles with your stylus.' : 'Tap Quest play area'}
+          onStartShouldSetResponder={() => status === 'running'} onMoveShouldSetResponder={() => status === 'running'}
+          onResponderGrant={event => touch(event, 'down')} onResponderMove={event => touch(event, 'move')}
+          onResponderRelease={event => touch(event, 'up')} onResponderTerminationRequest={() => false}
+          style={{ width: boardWidth, height: boardHeight, borderRadius: RADIUS.lg, backgroundColor: theme.raised,
+            borderWidth: TAP_QUEST_VIEW.borderWidth, borderColor: theme.border,
+            opacity: status === 'paused' ? .5 : 1, overflow: 'hidden' }}>
+          <Svg width={boardWidth} height={boardHeight} pointerEvents="none">
+            {state && active && state.mode === 'trace' && <>
+              <Polyline points={state.path.map(point => `${scale(point.x)},${scale(point.y)}`).join(' ')}
+                fill="none" stroke={theme.teal} strokeWidth={scale(state.settings.targetRadius) * 1.4}
+                strokeLinecap="round" strokeLinejoin="round" opacity={.35} />
+              {state.path.map((point, i) => <Circle key={i} cx={scale(point.x)} cy={scale(point.y)}
+                r={TAP_QUEST_VIEW.pathDotSize} fill={theme.teal} />)}
+            </>}
+            {state && active && state.mode === 'memory' && state.choices.map((choice, i) => <Circle key={i}
+              cx={scale(choice.x)} cy={scale(choice.y)} r={scale(choice.radius)} fill={theme.surface}
+              stroke={theme.purple} strokeWidth={TAP_QUEST_VIEW.targetBorderWidth} />)}
+            {state?.target && active && <Circle cx={scale(state.target.x)} cy={scale(state.target.y)}
+              r={scale(state.target.radius)} fill={state.mode === 'memory' ? theme.purple : theme.coral}
+              stroke={theme.navy} strokeWidth={TAP_QUEST_VIEW.targetBorderWidth} />}
+          </Svg>
+          {!active && <View pointerEvents="none" style={{ position: 'absolute', inset: 0,
+            alignItems: 'center', justifyContent: 'center', padding: SPACE.xl }}>
+            <Text style={{ fontFamily: FONTS.body, fontSize: TYPE.body, color: theme.secondary, textAlign: 'center' }}>
+              {status === 'finished' ? 'Great tapping!' : 'Pick a mode, then Start'}</Text>
+          </View>}
+        </View>}
+      </View>
+
+      {/* Progress and every button, stacked beside the board so it can use the full height. */}
+      <View style={{ width: compact ? TAP_QUEST_VIEW.sideWidthCompact : TAP_QUEST_VIEW.sideWidth, gap: SPACE.sm }}>
+        {state && active && <View style={{ gap: SPACE.xs, padding: SPACE.md, borderRadius: RADIUS.md,
+          backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border }}>
           <Body theme={theme} small>{state.mode === 'calm' ? `${state.matchedCount} circles`
             : `${Math.min(state.targetIndex + 1, state.targetCount)} of ${state.targetCount}`}</Body>
           <Body theme={theme} small>{state.score} points</Body>
-        </View>
-        {state.remainingMs !== null && <ProgressBar theme={theme} value={state.remainingMs} max={windowMs}
-          color={theme.teal} label="Time for this target" />}
-        {state.mode === 'memory' && <Body theme={theme} small>{recall ? 'Your turn: tap them in the same order.'
-          : 'Watch the circles light up…'}</Body>}
-      </View>}
-
-      <View style={{ flex: 1, minHeight: 0, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' }}
-        onLayout={event => {
-          const { width: w, height: h } = event.nativeEvent.layout;
-          setBoardSide(Math.floor(Math.min(w, h)));
-        }}>
-      {boardSide > 0 && <View accessible accessibilityLabel={active ? 'Tap Quest play area. Touch the circles with your stylus.'
-        : 'Tap Quest play area'}
-        onLayout={event => setLayout(event.nativeEvent.layout)}
-        onStartShouldSetResponder={() => status === 'running'} onMoveShouldSetResponder={() => status === 'running'}
-        onResponderGrant={event => touch(event, 'down')} onResponderMove={event => touch(event, 'move')}
-        onResponderRelease={event => touch(event, 'up')} onResponderTerminationRequest={() => false}
-        style={{ width: boardSide, height: boardSide,
-          borderRadius: RADIUS.lg, backgroundColor: theme.raised,
-          opacity: status === 'paused' ? .5 : 1, overflow: 'hidden' }}>
-        <Svg width={size} height={layout.height} pointerEvents="none">
-          {state && active && state.mode === 'trace' && <>
-            <Polyline points={state.path.map(point => `${scale(point.x)},${scale(point.y)}`).join(' ')}
-              fill="none" stroke={theme.teal} strokeWidth={scale(state.settings.targetRadius) * 1.4}
-              strokeLinecap="round" strokeLinejoin="round" opacity={.35} />
-            {state.path.map((point, i) => <Circle key={i} cx={scale(point.x)} cy={scale(point.y)}
-              r={TAP_QUEST_VIEW.pathDotSize} fill={theme.teal} />)}
-          </>}
-          {state && active && state.mode === 'memory' && state.choices.map((choice, i) => <Circle key={i}
-            cx={scale(choice.x)} cy={scale(choice.y)} r={scale(choice.radius)} fill={theme.surface}
-            stroke={theme.purple} strokeWidth={TAP_QUEST_VIEW.targetBorderWidth} />)}
-          {state?.target && active && <Circle cx={scale(state.target.x)} cy={scale(state.target.y)}
-            r={scale(state.target.radius)} fill={state.mode === 'memory' ? theme.purple : theme.coral}
-            stroke={theme.navy} strokeWidth={TAP_QUEST_VIEW.targetBorderWidth} />}
-        </Svg>
-        {!active && <View pointerEvents="none" style={{ position: 'absolute', inset: 0,
-          alignItems: 'center', justifyContent: 'center', padding: SPACE.xl }}>
-          <Text style={{ fontFamily: FONTS.body, fontSize: TYPE.body, color: theme.secondary, textAlign: 'center' }}>
-            {status === 'finished' ? 'Great tapping!' : 'Pick a mode, then Start'}</Text>
+          {state.remainingMs !== null && <ProgressBar theme={theme} value={state.remainingMs} max={windowMs}
+            color={theme.teal} label="Time for this target" />}
+          {state.mode === 'memory' && <Body theme={theme} small>{recall ? 'Your turn: tap them in the same order.'
+            : 'Watch the circles light up…'}</Body>}
         </View>}
-      </View>}
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: SPACE.md, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {!active && <Button theme={theme} label={starting ? 'Making pattern…' : status === 'finished' ? 'Play again' : 'Start'}
-          icon="sparkle" color={theme.yellow} onPress={startPattern}
-          disabled={starting || saveStatus === 'saving' || stylusInJimmy} />}
-        {status === 'running' && <Button theme={theme} label="Pause" onPress={pause} />}
-        {status === 'paused' && <Button theme={theme} label="Resume" icon="timer" color={theme.yellow}
+        {!active && <Button theme={theme} label={starting ? 'Starting…' : status === 'finished' ? 'Play again' : 'Start'}
+          icon="sparkle" color={theme.yellow} onPress={startPattern} style={buttonStyle}
+          disabled={starting || saveStatus === 'saving' || stylusInJimmy || boardWidth <= 0} />}
+        {status === 'running' && <Button theme={theme} label="Pause" onPress={pause} style={buttonStyle} />}
+        {status === 'paused' && <Button theme={theme} label="Resume" icon="timer" color={theme.yellow} style={buttonStyle}
           onPress={() => { setStylusPaused(false); resume(); }} disabled={stylusInJimmy} />}
         {state?.mode === 'memory' && recall && status === 'running' && <Button theme={theme} label="Show me again"
-          icon="undo" onPress={() => submit({ type: 'replaySequence' })} />}
+          icon="undo" onPress={() => submit({ type: 'replaySequence' })} style={buttonStyle} />}
         {state?.mode === 'calm' && status === 'running' && <Button theme={theme} label="I’m done" icon="check"
-          color={theme.mint} onPress={() => submit({ type: 'finish' })} />}
-        {active && state?.mode !== 'calm' && <Button theme={theme} label="Finish now" icon="check" onPress={run.quit} />}
+          color={theme.mint} onPress={() => submit({ type: 'finish' })} style={buttonStyle} />}
+        {active && state?.mode !== 'calm' && <Button theme={theme} label="Finish now" icon="check" onPress={run.quit}
+          style={buttonStyle} />}
         {status === 'finished' && saveStatus === 'failed' && <Button theme={theme} label="Retry saving" icon="check"
-          onPress={run.retrySave} />}
+          onPress={run.retrySave} style={buttonStyle} />}
+        {startFailed && <View accessibilityLiveRegion="polite"><Body theme={theme} small>
+          That didn’t start. Please try again.</Body></View>}
       </View>
-      {patternMessage && <View accessibilityLiveRegion="polite"><Body theme={theme} small>{patternMessage}</Body></View>}
     </View>
   </View>;
 }
