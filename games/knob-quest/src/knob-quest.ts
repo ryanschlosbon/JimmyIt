@@ -1,21 +1,38 @@
-import { defineGame, type GameSession } from '@jimmyit/game-sdk';
+import { defineGame, type FidgetEvent, type GameSession } from '@jimmyit/game-sdk';
 import type { KnobQuestAction } from './knob-input';
 
 export interface Rect { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
 export interface Fireball { readonly x: number; readonly phaseMs: number; readonly periodMs: number; }
 export interface KnobQuestLevel {
   readonly width: number; readonly height: number; readonly start: { readonly x: number; readonly y: number };
-  readonly platforms: readonly Rect[]; readonly hazards: readonly Rect[];
-  readonly gems: readonly Rect[]; readonly goal: Rect;
+  /** Everything Jimmy can stand on: the floor pieces and the floating platforms. */
+  readonly platforms: readonly Rect[];
+  /** Gaps in the floor. Falling below the level costs a life; Jimmy comes back at the checkpoint. */
+  readonly holes: readonly Rect[];
+  readonly goal: Rect;
   readonly fireballs?: readonly Fireball[];
   readonly checkpoint?: { readonly x: number; readonly y: number };
 }
 export interface KnobQuestState {
   readonly x: number; readonly y: number; readonly width: number; readonly height: number;
-  readonly level: KnobQuestLevel; readonly collected: readonly number[];
-  readonly checkpoints: number; readonly checkpointReached: boolean;
+  /** Vertical speed (positive = falling), so the view can stretch Jimmy in the air. */
+  readonly verticalVelocity: number;
+  readonly grounded: boolean;
+  /** Game time and place of the last takeoff and landing, for sparks and squash. -Infinity before the first. */
+  readonly jumpedAtMs: number; readonly jumpedFrom: { readonly x: number; readonly y: number };
+  readonly landedAtMs: number; readonly landingSpeed: number;
+  readonly lives: number; readonly maxLives: number;
+  /** Game time of the last fall or bump, for a gentle respawn blink. */
+  readonly respawnedAtMs: number;
+  readonly level: KnobQuestLevel;
+  /** Indexes of platforms already landed on (each pays once). */
+  readonly visited: readonly number[];
+  readonly restarts: number; readonly checkpointReached: boolean;
   readonly fireballs: readonly Rect[];
-  readonly completed: boolean; readonly elapsedMs: number;
+  readonly completed: boolean;
+  /** The run ended because Jimmy ran out of lives (the score is kept). */
+  readonly outOfLives: boolean;
+  readonly elapsedMs: number;
   readonly horizontal: number; readonly vertical: number; readonly score: number;
 }
 export type KnobQuestDifficulty = 'easy' | 'normal' | 'hard';
@@ -25,6 +42,16 @@ const HORIZONTAL_SPEED = 24;
 const UPWARD_THRUST = 42;
 const GRAVITY = 18;
 const MAX_VERTICAL_SPEED = 28;
+const MAX_LIVES = 3;
+const PLATFORM_POINTS = 20;
+const CHECKPOINT_POINTS = 50;
+const GOAL_POINTS = 100;
+/** Toy turning is "energy" that fades over this long, so turning faster pushes harder. */
+const TURN_FADE_MS = 250;
+/** Spinner degrees per second for full speed (about 1.3 turns a second). */
+const SPIN_FULL_DEG_PER_S = 480;
+/** Screw detents per second for full lift. */
+const SCREW_FULL_DETENTS_PER_S = 8;
 
 function createRandom(seed: number): () => number {
   let value = (Number.isFinite(seed) ? Math.trunc(seed) : 1) >>> 0;
@@ -34,31 +61,53 @@ function createRandom(seed: number): () => number {
   };
 }
 
-/** Build a repeatable, longer route; difficulty changes obstacles rather than the controls. */
+/** The floor pieces left after cutting the holes out of a full-width floor. */
+function floorWithHoles(width: number, height: number, holes: readonly Rect[]): Rect[] {
+  const floor: Rect[] = [];
+  let x = 0;
+  for (const hole of [...holes].sort((a, b) => a.x - b.x)) {
+    if (hole.x > x) floor.push({ x, y: height - 4, width: hole.x - x, height: 4 });
+    x = Math.max(x, hole.x + hole.width);
+  }
+  if (x < width) floor.push({ x, y: height - 4, width: width - x, height: 4 });
+  return floor;
+}
+
+/**
+ * Build a repeatable route. Easy has a solid floor; normal cuts small holes under some platforms; hard cuts big ones
+ * plus a stretch with no floor at all, where the platforms are the only way across.
+ */
 export function createKnobQuestLevel(seed: number, difficulty: KnobQuestDifficulty = 'normal'): KnobQuestLevel {
   const random = createRandom(seed);
   const width = difficulty === 'easy' ? 180 : difficulty === 'hard' ? 260 : 220;
   const height = 72;
   const platformCount = difficulty === 'easy' ? 8 : difficulty === 'hard' ? 13 : 10;
-  const platformWidth = difficulty === 'easy' ? 19 : difficulty === 'hard' ? 11 : 15;
+  const platformWidth = difficulty === 'easy' ? 19 : difficulty === 'hard' ? 13 : 16;
   const step = (width - 32) / platformCount;
-  const platforms: Rect[] = [{ x: 0, y: height - 4, width, height: 4 }];
-  const gems: Rect[] = [];
-  const hazards: Rect[] = [];
+  const floating: Rect[] = [];
   let platformY = 54;
   for (let index = 0; index < platformCount; index++) {
     const x = 14 + index * step + Math.round(random() * 3);
     platformY = Math.max(26, Math.min(55, platformY + Math.round(random() * 12) - 7));
-    const item = { x, y: platformY, width: platformWidth + Math.floor(random() * 3), height: 3 };
-    platforms.push(item);
-    if (index % 2 === 0) gems.push({ x: item.x + item.width / 2 - 1.5, y: item.y - 4, width: 3, height: 3 });
-    if (index > 0 && index < platformCount - 1 &&
-      index % (difficulty === 'hard' ? 2 : difficulty === 'normal' ? 3 : 4) === 0) {
-      hazards.push({ x: item.x + item.width + 2, y: height - 8, width: 5, height: 4 });
+    floating.push({ x, y: platformY, width: platformWidth + Math.floor(random() * 3), height: 3 });
+  }
+  const holes: Rect[] = [];
+  if (difficulty !== 'easy') {
+    const holeWidth = difficulty === 'hard' ? 16 : 7;
+    const every = difficulty === 'hard' ? 2 : 3;
+    // Holes sit under platforms, never at the start, so there is always somewhere safe to land.
+    for (let index = 1; index < platformCount - 1; index += every) {
+      const platform = floating[index];
+      if (platform) holes.push({ x: platform.x + platform.width / 2 - holeWidth / 2, y: height - 4, width: holeWidth, height: 4 });
+    }
+    if (difficulty === 'hard') {
+      const from = floating[Math.floor(platformCount * 0.6)];
+      const to = floating[Math.floor(platformCount * 0.6) + 2];
+      if (from && to) holes.push({ x: from.x, y: height - 4, width: to.x + to.width - from.x, height: 4 });
     }
   }
-  const last = platforms[platforms.length - 1]!;
-  const middle = platforms[Math.floor(platforms.length / 2)]!;
+  const last = floating[floating.length - 1]!;
+  const middle = floating[Math.floor(floating.length / 2)]!;
   const fireballCount = difficulty === 'easy' ? 0 : difficulty === 'hard' ? 4 : 2;
   const fireballs = Array.from({ length: fireballCount }, (_, index) => ({
     x: 36 + (index + 1) * (width - 70) / (fireballCount + 1),
@@ -66,8 +115,8 @@ export function createKnobQuestLevel(seed: number, difficulty: KnobQuestDifficul
     periodMs: 3800 + Math.floor(random() * 1300),
   }));
   return {
-    width, height, start: { x: 5, y: height - 8 }, platforms, hazards, gems,
-    goal: { x: last.x + last.width - 6, y: last.y - 6, width: 7, height: 6 },
+    width, height, start: { x: 5, y: height - 8 }, platforms: [...floorWithHoles(width, height, holes), ...floating],
+    holes, goal: { x: last.x + last.width - 6, y: last.y - 6, width: 7, height: 6 },
     checkpoint: { x: middle.x + 2, y: middle.y - PLAYER_SIZE }, fireballs,
   };
 }
@@ -86,91 +135,148 @@ function fallingFireballs(level: KnobQuestLevel, elapsedMs: number): readonly Re
   });
 }
 
+const clampUnit = (value: number) => Math.max(-1, Math.min(1, value));
+
 export function createKnobQuestGame(level?: KnobQuestLevel,
   difficulty: KnobQuestDifficulty = 'normal', seed = 1) {
   const activeLevel = level ?? createKnobQuestLevel(seed, difficulty);
+  const floorY = activeLevel.height - 4;
   return defineGame<KnobQuestState, KnobQuestAction>({
     id: 'knob-quest', title: 'Knob Quest',
-    description: 'Guide your explorer across platforms with two controls.',
+    description: 'Roll Jimmy across platforms with two controls.',
     skills: ['spin', 'screw'], needsToy: false, durationMs: null,
-    starThresholds: [50, 100, 180],
+    starThresholds: [60, 180, 290],
     create(session: GameSession) {
       let x = activeLevel.start.x;
       let y = activeLevel.start.y;
       let horizontal = 0;
       let vertical = 0;
+      // Toy turning, in the same units as horizontal/vertical once divided by the "full" rate.
+      let spinEnergy = 0;
+      let screwEnergy = 0;
       let verticalVelocity = 0;
+      let grounded = true;
+      let jumpedAtMs = Number.NEGATIVE_INFINITY;
+      let jumpedFrom = { x, y };
+      let landedAtMs = Number.NEGATIVE_INFINITY;
+      let landingSpeed = 0;
+      let respawnedAtMs = Number.NEGATIVE_INFINITY;
       let lastTickMs = 0;
-      let checkpoints = 0;
+      let lives = MAX_LIVES;
+      let restarts = 0;
       let checkpointReached = false;
       let completed = false;
-      const collected = new Set<number>();
+      let outOfLives = false;
+      const visited = new Set<number>();
+
+      const metrics = () => {
+        session.score.setMetric('platformCount', visited.size);
+        session.score.setMetric('restartCount', restarts);
+        session.score.setMetric('livesLeftCount', lives);
+      };
+
+      const loseLife = (elapsedMs: number) => {
+        restarts++;
+        lives--;
+        respawnedAtMs = elapsedMs;
+        horizontal = 0;
+        vertical = 0;
+        spinEnergy = 0;
+        screwEnergy = 0;
+        verticalVelocity = 0;
+        session.feedback('nudge');
+        if (lives <= 0) {
+          outOfLives = true;
+          metrics();
+          session.finish();
+          return;
+        }
+        x = checkpointReached && activeLevel.checkpoint ? activeLevel.checkpoint.x : activeLevel.start.x;
+        y = checkpointReached && activeLevel.checkpoint ? activeLevel.checkpoint.y : activeLevel.start.y;
+        grounded = true;
+      };
+
       return {
-        getState: () => ({ x, y, width: PLAYER_SIZE, height: PLAYER_SIZE, level: activeLevel,
-          collected: [...collected], checkpoints, checkpointReached,
-          fireballs: fallingFireballs(activeLevel, lastTickMs), completed, elapsedMs: lastTickMs,
+        getState: () => ({ x, y, width: PLAYER_SIZE, height: PLAYER_SIZE, verticalVelocity, grounded,
+          jumpedAtMs, jumpedFrom, landedAtMs, landingSpeed, lives, maxLives: MAX_LIVES, respawnedAtMs,
+          level: activeLevel, visited: [...visited], restarts, checkpointReached,
+          fireballs: fallingFireballs(activeLevel, lastTickMs), completed, outOfLives, elapsedMs: lastTickMs,
           horizontal, vertical, score: session.score.score }),
         onAction(action) {
           if (action.type !== 'axis' || !Number.isFinite(action.value)) return;
-          const value = Math.max(-1, Math.min(1, action.value));
+          const value = clampUnit(action.value);
           if (action.axis === 'horizontal') horizontal = value;
           else vertical = value;
         },
+        // The real toy: the spinner rolls Jimmy and the screw lifts him. Turning faster pushes harder.
+        onEvent(event: FidgetEvent) {
+          if (event.type === 'spin') spinEnergy += event.deltaDeg;
+          else if (event.type === 'screw') screwEnergy += event.deltaDetents;
+        },
         onTick(elapsedMs) {
-          if (completed) return;
+          if (completed || outOfLives) return;
           const dt = Math.min(0.1, Math.max(0, (elapsedMs - lastTickMs) / 1000));
           lastTickMs = elapsedMs;
+          const fade = Math.exp(-dt * 1000 / TURN_FADE_MS);
+          spinEnergy *= fade;
+          screwEnergy *= fade;
+          const fadeS = TURN_FADE_MS / 1000;
+          const moveX = clampUnit(horizontal + spinEnergy / (SPIN_FULL_DEG_PER_S * fadeS));
+          // Tightening the screw (positive) lifts Jimmy, like the up arrow (negative).
+          const moveY = clampUnit(vertical - screwEnergy / (SCREW_FULL_DETENTS_PER_S * fadeS));
           const oldX = x;
           const oldY = y;
-          x = Math.max(0, Math.min(activeLevel.width - PLAYER_SIZE, x + horizontal * HORIZONTAL_SPEED * dt));
+          const wasGrounded = grounded;
+          x = Math.max(0, Math.min(activeLevel.width - PLAYER_SIZE, x + moveX * HORIZONTAL_SPEED * dt));
           if (activeLevel.platforms.some((platform) => overlaps(x, y, platform))) x = oldX;
           // Stronger turning builds upward momentum, followed by a gentle gravity-driven arc.
           verticalVelocity = Math.max(-MAX_VERTICAL_SPEED, Math.min(MAX_VERTICAL_SPEED,
-            verticalVelocity + (vertical * UPWARD_THRUST + GRAVITY) * dt));
-          y = Math.max(0, Math.min(activeLevel.height - PLAYER_SIZE, y + verticalVelocity * dt));
-          if (y === 0 || y === activeLevel.height - PLAYER_SIZE) verticalVelocity = 0;
-          for (const platform of activeLevel.platforms) {
+            verticalVelocity + (moveY * UPWARD_THRUST + GRAVITY) * dt));
+          const fallSpeed = verticalVelocity;
+          y = Math.max(0, y + verticalVelocity * dt);
+          if (y === 0) verticalVelocity = 0;
+          grounded = false;
+          for (const [index, platform] of activeLevel.platforms.entries()) {
             if (!overlaps(x, y, platform)) continue;
-            if (verticalVelocity >= 0 && oldY + PLAYER_SIZE <= platform.y + 0.01) y = platform.y - PLAYER_SIZE;
-            else if (verticalVelocity < 0 && oldY >= platform.y + platform.height - 0.01) y = platform.y + platform.height;
+            if (verticalVelocity >= 0 && oldY + PLAYER_SIZE <= platform.y + 0.01) {
+              y = platform.y - PLAYER_SIZE;
+              grounded = true;
+              if (platform.y < floorY && !visited.has(index)) {
+                visited.add(index);
+                session.score.add(PLATFORM_POINTS);
+                session.score.countAction();
+                session.feedback('tick');
+              }
+            } else if (verticalVelocity < 0 && oldY >= platform.y + platform.height - 0.01) y = platform.y + platform.height;
             else y = oldY;
             verticalVelocity = 0;
           }
+          if (wasGrounded && !grounded && verticalVelocity < 0) {
+            jumpedAtMs = elapsedMs;
+            jumpedFrom = { x: oldX, y: oldY };
+          }
+          if (!wasGrounded && grounded) {
+            landedAtMs = elapsedMs;
+            landingSpeed = fallSpeed;
+          }
           if (!checkpointReached && activeLevel.checkpoint && x >= activeLevel.checkpoint.x) {
             checkpointReached = true;
+            session.score.add(CHECKPOINT_POINTS);
             session.feedback('success');
           }
-          if (activeLevel.hazards.some((hazard) => overlaps(x, y, hazard)) ||
-            fallingFireballs(activeLevel, elapsedMs).some((fireball) => overlaps(x, y, fireball))) {
-            checkpoints++;
-            x = checkpointReached && activeLevel.checkpoint ? activeLevel.checkpoint.x : activeLevel.start.x;
-            y = checkpointReached && activeLevel.checkpoint ? activeLevel.checkpoint.y : activeLevel.start.y;
-            horizontal = 0;
-            vertical = 0;
-            verticalVelocity = 0;
-            session.feedback('nudge');
+          if (y > activeLevel.height || fallingFireballs(activeLevel, elapsedMs).some((ball) => overlaps(x, y, ball))) {
+            loseLife(elapsedMs);
             return;
           }
-          activeLevel.gems.forEach((gem, index) => {
-            if (collected.has(index) || !overlaps(x, y, gem)) return;
-            collected.add(index);
-            session.score.add(30);
-            session.score.countAction();
-            session.feedback('tick');
-          });
           if (overlaps(x, y, activeLevel.goal)) {
             completed = true;
-            session.score.add(100);
-            session.score.setMetric('gemCount', collected.size);
-            session.score.setMetric('checkpointCount', checkpoints);
+            session.score.add(GOAL_POINTS);
+            metrics();
             session.score.setMetric('completionMs', elapsedMs);
             session.finish();
           }
         },
-        onFinish() {
-          session.score.setMetric('gemCount', collected.size);
-          session.score.setMetric('checkpointCount', checkpoints);
-        },
+        onFinish() { metrics(); },
       };
     },
   });

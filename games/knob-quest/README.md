@@ -1,27 +1,33 @@
 # Knob Quest
 
-Knob Quest practices coordinating two controls. One axis moves left or right;
-the other supplies upward or downward lift while gravity and solid platforms
-shape the route. Every run generates a new, repeatable route from a seed.
-Faster upward turning gives more lift against gravity. Movement speed and
-gravity stay the same at every difficulty. Easy has wider platforms and no
-falling fireballs; Normal and Hard add a few timed fireballs, narrower
-platforms, more ground traps, and longer routes. A midway checkpoint limits
-the distance lost after a bump. Collecting a gem earns 30 points and reaching
-the goal earns 100. Bumps never subtract points. Both controls can be held at
-once. The on-screen arrows support touch play.
+Knob Quest practices coordinating two controls. The player is Jimmy, who rolls
+as he moves, stretches when he flies, squashes when he lands and throws sparks
+when he takes off. One control rolls him left or right; the other lifts him
+against gravity. On the toy, the spinner rolls and the screw lifts, and turning
+faster pushes harder. Every run generates a new, repeatable route from a seed.
 
-The rules accept `{ type: 'axis', axis, value }` with values from -1 to 1.
-Keyboard arrows should send -1 or 1 while held, zero on release. The
-`analogToAxis` adapter uses a configurable neutral (default 0.5), range
-(default 0.5), and dead zone (default 0.12). `rotaryToAxis` converts relative
-steps to a signed impulse using a configurable three-steps-for-full-speed
-default; a future hardware bridge must decide when that impulse decays to
-zero. `directionalToAxis` covers buttons or keyboard states. None assumes a
-sensor type, pin, BLE characteristic, or packet format.
+Easy has a solid floor. Normal cuts small holes in the floor under some
+platforms; hard cuts big ones plus a stretch with no floor at all, where the
+platforms are the way across. Normal and hard also drop a few timed fireballs.
+Movement and gravity are the same at every difficulty.
 
-The game does not require the toy for simulation. It saves gem, checkpoint,
-and completion time metrics through the existing game runner.
+Jimmy has three lives, shown by his color: green, then yellow, then red.
+Falling into a hole or bumping a fireball costs a life, and he comes back at the
+midway checkpoint once it is reached. After the last life the run ends gently
+("Jimmy needs a little rest!") and keeps every point. Landing on a platform for
+the first time earns 20 points, the checkpoint 50 and the flag 100. Points never
+go down. Both controls can be held at once. The on-screen arrows support touch
+play.
+
+The rules accept `{ type: 'axis', axis, value }` with values from -1 to 1 from
+the view and keyboard, and read the toy's `spin` and `screw` events directly as
+"turning energy" that fades over 250 ms: about 480 degrees a second of spinning,
+or 8 screw detents a second, is full speed. `analogToAxis`, `rotaryToAxis` and
+`directionalToAxis` remain for other sources. The app draws Jimmy and passes him
+to the view as `renderPlayer`; without it the view draws a plain face.
+
+The game does not require the toy. It saves platform, restart, lives-left and
+completion time metrics through the game runner.
 
 ## Windows demo
 
@@ -30,14 +36,13 @@ From the repository root, run `npm install` once and then
 finish or skip the intro, and choose **Knob Quest** on the Play shelf. Pick a
 difficulty and press Start. Hold left/right and up/down arrows independently,
 or use the large touch arrows. The browser console identifies keyboard
-simulation. No toy connection is required. Reach the purple goal to finish
+simulation. No toy connection is required. Reach the purple flag to finish
 and use **New route** to try a different level.
 
 ## Hardware checklist
 
-1. Confirm which sensors provide the two axes and their direction signs.
-2. Measure analog neutral, range, noise, and dead zone, or encoder step rate.
-3. Translate approved BLE input into the normalized axis actions and release
-   or decay values when rotation stops.
+1. Confirm the spinner and screw direction signs feel right (clockwise = right,
+   tighten = up).
+2. Tune the full-speed rates and the 250 ms fade against real spinning.
 4. Test diagonal movement, device approval, disconnect, and reconnect on a
    real phone and toy.

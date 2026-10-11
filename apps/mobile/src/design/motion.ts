@@ -60,10 +60,12 @@ export const ANIMATIONS = {
     /** Rolling off to the right while the screen peels away in stripes. */
     rollMs: 1500,
   },
-  /** Big score moments: the card springs in (components/CelebrationOverlay.tsx). */
-  celebrationPop: { enabled: true, friction: 5, tension: 120 },
-  /** Big score moments: confetti falls and spins (components/CelebrationOverlay.tsx). */
-  celebrationConfetti: { enabled: true, ms: 2400 },
+  /** Score moments in a game: the score pops and its chip springs in (components/GameScoreBar.tsx). */
+  scorePop: { enabled: true, scale: 1.35, friction: 4, tension: 140 },
+  /** Score moments in a game: sparks fly off the score once (components/GameScoreBar.tsx). */
+  scoreSparks: { enabled: true, ms: 700 },
+  /** Score moments from the toy's own games: a strip slides down from the top (components/CelebrationToast.tsx). */
+  toastSlide: { enabled: true, ms: 220 },
 } as const;
 
 export type AnimationName = keyof typeof ANIMATIONS;
