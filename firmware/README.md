@@ -39,6 +39,9 @@ power on → BOOT (4 s) → READY ──first move──► PLAYING ──2 s, n
   holds a moment before the ready screen.
 - **Every finished game is saved to flash** (up to 200; the oldest is replaced
   when full), with a real timestamp if the app has set the clock since power-on.
+  Saves write a temporary file and then replace the previous file. If flash
+  cannot mount, the toy still starts and plays, but scores cannot persist until
+  the flash is repaired.
 - **When the app connects, it uploads every game it hasn't seen yet.** The toy
   keeps playing Free Play while connected, and those games reach the app as they
   finish. Starting a game in the app ends a toy game in progress (it is saved)
@@ -137,6 +140,8 @@ they're written to flash after every game, so turning the toy off loses nothing.
 | `jimmyit_fidget/src/connection_approval.*` | The "connect?" question, timeouts, remembered phones   | host |
 | `jimmyit_fidget/src/battery_level.*`  | ADC → millivolts → percent, smoothing                       | host |
 | `test/`                               | Host test runner; `gen_vectors.py` turns the golden vectors into C++ checks | — |
+| `oled_diagnostic/`                    | OLED and I2C hardware test at 100 kHz                     | on-device |
+| `recovery_wipe/`                      | One-time internal flash reset (erases toy scores and approved phones) | on-device |
 
 Everything in `src/` has no Arduino headers and is tested on a laptop:
 
@@ -164,6 +169,21 @@ arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840 firmware/jimmyit_fidget
 If the build ends with `exec: "python": executable file not found`, the board
 package wants `python` and macOS only has `python3`. Run
 `ln -s "$(which python3)" /usr/local/bin/python` once, or use the Arduino IDE.
+
+### OLED and flash recovery test
+
+1. Upload `oled_diagnostic/oled_diagnostic.ino`. The OLED should show clear
+   `JIMMY OLED TEST` text, a moving square and an increasing frame count. It
+   uses the same 100 kHz I2C speed as the full firmware.
+2. Upload `jimmyit_fidget/jimmyit_fidget.ino`. The test image must disappear;
+   the JimmyIt boot animation and READY screen should draw clearly. Reset the
+   XIAO once and check that the screen starts again. This catches a stalled
+   startup or an OLED bus speed regression.
+   Finish a game, reset once more, and check that the saved best is retained.
+3. If startup stops at saved-score loading, upload
+   `recovery_wipe/recovery_wipe.ino`. **This erases all scores saved on the toy
+   and its approved-phone list.** Wait for `FLASH WIPED / READY TO REFLASH`,
+   then upload the full sketch again. Never leave the wipe sketch installed.
 
 ## Testing Bluetooth without our app
 

@@ -572,13 +572,19 @@ void render(uint32_t nowMs) {
 void setup() {
   Serial.begin(115200);
   Wire.begin();
-  Wire.setClock(400000);  // every part on the bus does 400 kHz; keeps the polled encoder from missing steps
+  Wire.setClock(100000);  // this OLED is reliable when the shared bus stays at 100 kHz
 
+  const bool oledReady = uiBegin();
+  if (oledReady) {
+    uiNotice("JIMMY STARTING");
+    uiFlush();
+  } else {
+    Serial.println("OLED initialization failed!");
+  }
   inputsBegin();
-  if (!uiBegin()) Serial.println("OLED initialization failed!");
   hapticsBegin();
   batteryBegin();
-  storageBegin();
+  if (!storageBegin()) Serial.println("Storage unavailable; scores will not persist");
   storageLoad(scoreLog);
   storageLoadApprovedApps(approvedApps);
 

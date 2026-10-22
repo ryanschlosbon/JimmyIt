@@ -18,10 +18,10 @@ constexpr int kScreenWidth = 128;
 constexpr int kScreenHeight = 64;
 constexpr int kOledReset = -1;
 constexpr uint8_t kScreenAddress = 0x3C;
+constexpr uint32_t kOledClockHz = 100000;
 
-// Leave the bus at 400 kHz after each frame (the library drops it to 100 kHz by default),
-// so the expander and spinner reads between frames stay quick.
-Adafruit_SSD1306 display(kScreenWidth, kScreenHeight, &Wire, kOledReset, 400000UL, 400000UL);
+// The attached OLED works reliably with the shared bus at 100 kHz.
+Adafruit_SSD1306 display(kScreenWidth, kScreenHeight, &Wire, kOledReset, kOledClockHz, kOledClockHz);
 bool displayOk = false;
 
 void begin() {
@@ -96,7 +96,16 @@ void sparkles(uint32_t frame, uint8_t count) {
 }  // namespace
 
 bool uiBegin() {
-  displayOk = display.begin(SSD1306_SWITCHCAPVCC, kScreenAddress);
+  Wire.setClock(kOledClockHz);
+  Wire.beginTransmission(kScreenAddress);
+  const bool oledPresent = Wire.endTransmission() == 0;
+  if (!oledPresent) {
+    displayOk = false;
+    return false;
+  }
+
+  // Wire.begin() already ran in setup; a second call would reset the shared bus.
+  displayOk = display.begin(SSD1306_SWITCHCAPVCC, kScreenAddress, true, false);
   return displayOk;
 }
 
